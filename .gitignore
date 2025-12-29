@@ -1,0 +1,23 @@
+node_modules
+# Keep environment variables out of version control
+.env
+.env*.local
+.env.production
+
+# Development database
+prisma/dev.db
+prisma/dev.db-journal
+
+# Uploads (archivos de usuarios - no subir a git)
+uploads/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store

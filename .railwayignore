@@ -1,0 +1,14 @@
+node_modules
+*.log
+.env
+.env.local
+dist
+uploads
+prisma/dev.db
+prisma/dev.db-journal
+.DS_Store
+*.test.ts
+*.test.js
+__tests__
+coverage
+.vscode
