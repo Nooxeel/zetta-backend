@@ -1,10 +1,28 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
+import multer from 'multer'
 import prisma from '../lib/prisma'
+import { profileImageStorage } from '../lib/cloudinary'
 
 const router = Router()
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
+
+// Configure multer for profile images
+const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true)
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'))
+  }
+}
+
+const profileUpload = multer({
+  storage: profileImageStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: imageFilter
+})
 
 // Middleware to verify JWT and get user
 const authenticate = async (req: Request, res: Response, next: Function) => {
@@ -244,9 +262,14 @@ router.get('/:id', async (req: Request, res: Response) => {
 })
 
 // Update creator profile (authenticated)
-router.put('/profile', authenticate, async (req: Request, res: Response) => {
+router.put('/profile', authenticate, profileUpload.fields([
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'coverImage', maxCount: 1 }
+]), async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] }
+    
     const {
       bio,
       backgroundColor,
@@ -257,6 +280,18 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       fontFamily,
       coverImage
     } = req.body
+
+    // Get uploaded file URLs from Cloudinary
+    let profileImageUrl = null
+    let coverImageUrl = null
+
+    if (files?.profileImage?.[0]) {
+      profileImageUrl = files.profileImage[0].path
+    }
+
+    if (files?.coverImage?.[0]) {
+      coverImageUrl = files.coverImage[0].path
+    }
 
     // Get creator profile
     const creator = await prisma.creator.findUnique({
@@ -303,19 +338,28 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     }
 
     // Update profile and create audit logs in transaction
+    const updateData: any = {
+      bio,
+      backgroundColor,
+      backgroundGradient,
+      backgroundImage,
+      accentColor,
+      textColor,
+      fontFamily
+    }
+
+    // Add image URLs if uploaded
+    if (profileImageUrl) {
+      updateData.profileImage = profileImageUrl
+    }
+    if (coverImageUrl || coverImage) {
+      updateData.coverImage = coverImageUrl || coverImage
+    }
+
     const [updated] = await prisma.$transaction([
       prisma.creator.update({
         where: { id: creator.id },
-        data: {
-          bio,
-          backgroundColor,
-          backgroundGradient,
-          backgroundImage,
-          accentColor,
-          textColor,
-          fontFamily,
-          coverImage
-        },
+        data: updateData,
         include: {
           musicTracks: {
             orderBy: { order: 'asc' }
