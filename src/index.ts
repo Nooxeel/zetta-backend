@@ -26,6 +26,9 @@ const app = express()
 const PORT = process.env.PORT || 3001
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 
+// Trust Railway proxy
+app.set('trust proxy', 1)
+
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? [FRONTEND_URL, 'https://apapacho-backend-production.up.railway.app'] : FRONTEND_URL,
