@@ -8,21 +8,10 @@ const router = Router()
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
 
-// Configure multer for profile images
-const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true)
-  } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'))
-  }
-}
-
-// Configure multer for profile images - acepta cualquier archivo
+// TEMP: Usar memoryStorage simple para debug - SIN filtros, SIN cloudinary
 const profileUploadAny = multer({
-  storage: profileImageStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: imageFilter
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
 }).any()
 
 // Middleware to verify JWT and get user
@@ -264,16 +253,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // Update creator profile (authenticated)
 router.put('/profile', authenticate, (req, res, next) => {
-  console.log('=== PUT /profile REQUEST ===')
-  console.log('Headers:', req.headers)
-  console.log('Content-Type:', req.headers['content-type'])
+  console.log('🔍 [DEBUG] === INICIO PUT /profile ===')
+  console.log('🔍 [DEBUG] Headers:', JSON.stringify(req.headers, null, 2))
+  console.log('🔍 [DEBUG] Content-Type:', req.headers['content-type'])
+  console.log('🔍 [DEBUG] Method:', req.method)
+  console.log('🔍 [DEBUG] URL:', req.url)
   next()
-}, profileUploadAny, (req: Request, res: Response) => {
-  console.log('=== AFTER MULTER ===')
-  console.log('Files received:', req.files)
-  console.log('Body received:', req.body)
-  res.send('OK')
-}, async (req: Request, res: Response) => {
+}, profileUploadAny, async (req: Request, res: Response) => {
+  console.log('✅ [DEBUG] === DESPUÉS DE MULTER ===')
+  console.log('✅ [DEBUG] Files received:', req.files)
+  console.log('✅ [DEBUG] Body received:', req.body)
   try {
     const userId = (req as any).userId
     const files = req.files as Express.Multer.File[]

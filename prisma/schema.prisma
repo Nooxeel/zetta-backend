@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,9 +7,407 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ===========================================================
-// ENUMS - Sistema de Pagos
-// ===========================================================
+model User {
+  id             String         @id @default(uuid())
+  email          String         @unique
+  username       String         @unique
+  password       String
+  displayName    String
+  avatar         String?
+  isCreator      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  comments       Comment[]
+  creatorProfile Creator?
+  donationsSent  Donation[]
+  favorites      Favorite[]
+  subscriptions  Subscription[]
+}
+
+model Creator {
+  id                 String               @id @default(uuid())
+  userId             String               @unique
+  bio                String?
+  profileImage       String?
+  coverImage         String?
+  backgroundColor    String               @default("#0f0f14")
+  backgroundGradient String?
+  backgroundImage    String?
+  accentColor        String               @default("#d946ef")
+  textColor          String               @default("#ffffff")
+  fontFamily         String               @default("Inter")
+  totalViews         Int                  @default(0)
+  totalLikes         Int                  @default(0)
+  isVerified         Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  status             CreatorStatus        @default(ACTIVE)
+  tier               CreatorTier          @default(STANDARD)
+  tierEffectiveFrom  DateTime             @default(now())
+  comments           Comment[]
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccounts       CreatorBankAccount[]
+  tierHistory        CreatorTierHistory[]
+  donationsReceived  Donation[]
+  favoritedBy        Favorite[]
+  ledgerEntries      LedgerEntry[]
+  musicTracks        MusicTrack[]
+  payouts            Payout[]
+  posts              Post[]
+  products           Product[]
+  auditLogs          ProfileAuditLog[]
+  socialLinks        SocialLink[]
+  subscribers        Subscription[]
+  subscriptionTiers  SubscriptionTier[]
+  transactions       Transaction[]
+}
+
+model MusicTrack {
+  id         String   @id @default(uuid())
+  creatorId  String
+  youtubeUrl String
+  youtubeId  String
+  title      String
+  artist     String?
+  thumbnail  String
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+model SocialLink {
+  id        String   @id @default(uuid())
+  creatorId String
+  platform  String
+  url       String
+  label     String?
+  createdAt DateTime @default(now())
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+model SubscriptionTier {
+  id            String         @id @default(uuid())
+  creatorId     String
+  name          String
+  description   String?
+  price         Float
+  currency      String         @default("USD")
+  benefits      String
+  isActive      Boolean        @default(true)
+  order         Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+  creator       Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id        String           @id @default(uuid())
+  userId    String
+  creatorId String
+  tierId    String
+  status    String           @default("active")
+  startDate DateTime         @default(now())
+  endDate   DateTime?
+  autoRenew Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  creator   Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  tier      SubscriptionTier @relation(fields: [tierId], references: [id])
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creatorId])
+}
+
+model Post {
+  id             String   @id @default(uuid())
+  creatorId      String
+  title          String?
+  description    String?
+  content        String
+  visibility     String   @default("public")
+  requiredTierId String?
+  price          Float?
+  likes          Int      @default(0)
+  comments       Int      @default(0)
+  views          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  creator        Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+model Donation {
+  id              String   @id @default(uuid())
+  fromUserId      String
+  toCreatorId     String
+  amount          Float
+  currency        String   @default("USD")
+  message         String?
+  isAnonymous     Boolean  @default(false)
+  platformFee     Float
+  creatorEarnings Float
+  status          String   @default("completed")
+  createdAt       DateTime @default(now())
+  fromUser        User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
+  toCreator       Creator  @relation(fields: [toCreatorId], references: [id], onDelete: Cascade)
+}
+
+model ProfileAuditLog {
+  id         String   @id @default(uuid())
+  creatorId  String
+  fieldName  String
+  oldValue   String?
+  newValue   String?
+  changeType String   @default("update")
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([fieldName])
+  @@index([createdAt])
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  userId     String
+  creatorId  String
+  content    String
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([userId])
+  @@index([isApproved])
+  @@index([createdAt])
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  creatorId String
+  createdAt DateTime @default(now())
+  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creatorId])
+  @@index([userId])
+  @@index([creatorId])
+}
+
+model CreatorTierHistory {
+  id            String      @id @default(uuid())
+  creatorId     String
+  previousTier  CreatorTier
+  newTier       CreatorTier
+  reason        String?
+  changedBy     String?
+  effectiveFrom DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  creator       Creator     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([effectiveFrom])
+}
+
+model FeeSchedule {
+  id                     String          @id @default(uuid())
+  effectiveFrom          DateTime
+  standardPlatformFeeBps Int             @default(1000)
+  vipPlatformFeeBps      Int             @default(700)
+  holdDays               Int             @default(7)
+  minPayoutClp           BigInt          @default(20000)
+  payoutFrequency        PayoutFrequency @default(WEEKLY)
+  description            String?
+  createdBy              String?
+  createdAt              DateTime        @default(now())
+  transactions           Transaction[]
+
+  @@index([effectiveFrom(sort: Desc)])
+}
+
+model CreatorBankAccount {
+  id                String    @id @default(uuid())
+  creatorId         String
+  bankCode          String
+  bankName          String
+  accountType       String
+  accountNumber     String
+  accountHolderName String
+  accountHolderRut  String
+  isDefault         Boolean   @default(true)
+  isVerified        Boolean   @default(false)
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  creator           Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([isDefault])
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  creatorId    String
+  type         ProductType
+  title        String?
+  description  String?
+  priceClp     BigInt
+  metadata     Json          @default("{}")
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  creator      Creator       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([creatorId])
+  @@index([type])
+  @@index([isActive])
+}
+
+model Transaction {
+  id                    String            @id @default(uuid())
+  creatorId             String
+  fanUserId             String
+  productId             String?
+  productType           ProductType
+  currency              String            @default("CLP")
+  grossAmount           BigInt
+  appliedFeeScheduleId  String
+  appliedPlatformFeeBps Int
+  platformFeeAmount     BigInt
+  processorFeeAmount    BigInt            @default(0)
+  creatorPayableAmount  BigInt
+  status                TransactionStatus @default(SUCCEEDED)
+  occurredAt            DateTime          @default(now())
+  provider              String
+  providerPaymentId     String
+  providerEventId       String            @unique
+  metadata              Json              @default("{}")
+  createdAt             DateTime          @default(now())
+  chargebacks           Chargeback[]
+  ledgerEntries         LedgerEntry[]
+  payoutItems           PayoutItem[]
+  appliedFeeSchedule    FeeSchedule       @relation(fields: [appliedFeeScheduleId], references: [id])
+  creator               Creator           @relation(fields: [creatorId], references: [id])
+  product               Product?          @relation(fields: [productId], references: [id])
+
+  @@index([creatorId, occurredAt(sort: Desc)])
+  @@index([fanUserId])
+  @@index([status])
+  @@index([providerPaymentId])
+}
+
+model LedgerAccount {
+  id      String        @id @default(uuid())
+  code    String        @unique
+  name    String
+  type    String
+  entries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id            String        @id @default(uuid())
+  transactionId String?
+  payoutId      String?
+  accountId     String
+  creatorId     String?
+  currency      String        @default("CLP")
+  debit         BigInt        @default(0)
+  credit        BigInt        @default(0)
+  description   String?
+  createdAt     DateTime      @default(now())
+  account       LedgerAccount @relation(fields: [accountId], references: [id])
+  creator       Creator?      @relation(fields: [creatorId], references: [id])
+  payout        Payout?       @relation(fields: [payoutId], references: [id])
+  transaction   Transaction?  @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+  @@index([payoutId])
+  @@index([creatorId, createdAt(sort: Desc)])
+  @@index([accountId])
+}
+
+model Payout {
+  id                 String        @id @default(uuid())
+  creatorId          String
+  periodStart        DateTime
+  periodEnd          DateTime
+  currency           String        @default("CLP")
+  grossTotal         BigInt        @default(0)
+  platformFeeTotal   BigInt        @default(0)
+  adjustmentsTotal   BigInt        @default(0)
+  payoutAmount       BigInt        @default(0)
+  status             PayoutStatus  @default(CALCULATED)
+  sentAt             DateTime?
+  failedAt           DateTime?
+  failureReason      String?
+  retryCount         Int           @default(0)
+  nextRetryAt        DateTime?
+  providerTransferId String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  ledgerEntries      LedgerEntry[]
+  creator            Creator       @relation(fields: [creatorId], references: [id])
+  items              PayoutItem[]
+
+  @@index([creatorId, periodEnd(sort: Desc)])
+  @@index([status])
+  @@index([nextRetryAt])
+}
+
+model PayoutItem {
+  id            String      @id @default(uuid())
+  payoutId      String
+  transactionId String
+  amount        BigInt
+  createdAt     DateTime    @default(now())
+  payout        Payout      @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  @@unique([payoutId, transactionId])
+  @@index([transactionId])
+}
+
+model Chargeback {
+  id             String           @id @default(uuid())
+  transactionId  String
+  provider       String
+  providerCaseId String           @unique
+  amount         BigInt
+  reason         String?
+  status         ChargebackStatus @default(RECEIVED)
+  occurredAt     DateTime         @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  transaction    Transaction      @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+  @@index([status])
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  publishedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  retryCount    Int       @default(0)
+
+  @@index([publishedAt, createdAt])
+  @@index([aggregateType, aggregateId])
+  @@index([retryCount])
+}
 
 enum CreatorTier {
   STANDARD
@@ -57,600 +452,4 @@ enum ChargebackStatus {
   WON
   LOST
   REVERSED
-}
-
-// ===========================================================
-// MODELOS EXISTENTES
-// ===========================================================
-
-// Usuario base - puede ser fan o creador
-model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  username      String    @unique
-  password      String
-  displayName   String
-  avatar        String?
-  isCreator     Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Relación con perfil de creador (si es creador)
-  creatorProfile Creator?
-  
-  // Suscripciones como fan
-  subscriptions Subscription[]
-  
-  // Donaciones realizadas
-  donationsSent Donation[]
-  
-  // Comentarios realizados
-  comments      Comment[]
-  
-  // Favoritos (creadores que sigue)
-  favorites     Favorite[]
-}
-
-// Perfil de Creador de Contenido
-model Creator {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Información del perfil
-  bio               String?
-  profileImage      String?
-  coverImage        String?
-  
-  // Personalización estilo MySpace
-  backgroundColor   String   @default("#0f0f14")
-  backgroundGradient String?
-  backgroundImage   String?
-  accentColor       String   @default("#d946ef")
-  textColor         String   @default("#ffffff")
-  fontFamily        String   @default("Inter")
-  
-  // === SISTEMA DE PAGOS ===
-  tier              CreatorTier   @default(STANDARD)
-  tierEffectiveFrom DateTime      @default(now())
-  status            CreatorStatus @default(ACTIVE)
-  
-  // Música (máximo 3 tracks)
-  musicTracks       MusicTrack[]
-  
-  // Redes sociales
-  socialLinks       SocialLink[]
-  
-  // Contenido
-  posts             Post[]
-  
-  // Suscriptores y tiers
-  subscriptionTiers SubscriptionTier[]
-  subscribers       Subscription[]
-  
-  // Donaciones recibidas
-  donationsReceived Donation[]
-  
-  // Auditoría de cambios
-  auditLogs         ProfileAuditLog[]
-  
-  // Comentarios recibidos
-  comments          Comment[]
-  
-  // Usuarios que lo tienen como favorito
-  favoritedBy       Favorite[]
-  
-  // === RELACIONES SISTEMA DE PAGOS ===
-  bankAccounts      CreatorBankAccount[]
-  products          Product[]
-  transactions      Transaction[]
-  payouts           Payout[]
-  tierHistory       CreatorTierHistory[]
-  ledgerEntries     LedgerEntry[]
-  
-  // Stats
-  totalViews        Int      @default(0)
-  totalLikes        Int      @default(0)
-  
-  // Verificación
-  isVerified        Boolean  @default(false)
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-}
-
-// Tracks de música de YouTube para el perfil
-model MusicTrack {
-  id          String   @id @default(uuid())
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  youtubeUrl  String
-  youtubeId   String
-  title       String
-  artist      String?
-  thumbnail   String
-  order       Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-}
-
-// Links a redes sociales
-model SocialLink {
-  id        String   @id @default(uuid())
-  creatorId String
-  creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  platform  String   // twitter, instagram, tiktok, youtube, twitch, discord, other
-  url       String
-  label     String?
-  
-  createdAt DateTime @default(now())
-}
-
-// Tiers de suscripción
-model SubscriptionTier {
-  id          String   @id @default(uuid())
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  name        String
-  description String?
-  price       Float
-  currency    String   @default("USD")
-  benefits    String   // JSON array de beneficios
-  isActive    Boolean  @default(true)
-  order       Int      @default(0)
-  
-  subscriptions Subscription[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-// Suscripciones activas
-model Subscription {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  tierId      String
-  tier        SubscriptionTier @relation(fields: [tierId], references: [id])
-  
-  status      String   @default("active") // active, cancelled, expired, paused
-  startDate   DateTime @default(now())
-  endDate     DateTime?
-  autoRenew   Boolean  @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([userId, creatorId])
-}
-
-// Posts/Contenido
-model Post {
-  id          String   @id @default(uuid())
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  title       String?
-  description String?
-  
-  // Contenido del post (JSON con array de media)
-  content     String   // JSON: [{type, url, thumbnail, etc}]
-  
-  // Visibilidad
-  visibility  String   @default("public") // public, subscribers, tier
-  requiredTierId String?
-  
-  // Precio para compra individual (si aplica)
-  price       Float?
-  
-  // Stats
-  likes       Int      @default(0)
-  comments    Int      @default(0)
-  views       Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-// Donaciones
-model Donation {
-  id          String   @id @default(uuid())
-  fromUserId  String
-  fromUser    User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
-  
-  toCreatorId String
-  toCreator   Creator  @relation(fields: [toCreatorId], references: [id], onDelete: Cascade)
-  
-  amount      Float
-  currency    String   @default("USD")
-  message     String?
-  isAnonymous Boolean  @default(false)
-  
-  // Comisión de la plataforma
-  platformFee Float
-  creatorEarnings Float
-  
-  status      String   @default("completed") // pending, completed, failed, refunded
-  
-  createdAt   DateTime @default(now())
-}
-
-// Auditoría de cambios en perfiles de creadores
-model ProfileAuditLog {
-  id          String   @id @default(uuid())
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  // Información del cambio
-  fieldName   String   // backgroundColor, profileImage, coverImage, bio, etc.
-  oldValue    String?  // Valor anterior (null si es nuevo)
-  newValue    String?  // Nuevo valor (null si se eliminó)
-  
-  // Metadata
-  changeType  String   @default("update") // create, update, delete
-  ipAddress   String?
-  userAgent   String?
-  
-  createdAt   DateTime @default(now())
-
-  @@index([creatorId])
-  @@index([fieldName])
-  @@index([createdAt])
-}
-
-// Comentarios de usuarios en perfiles de creadores
-model Comment {
-  id          String   @id @default(uuid())
-  
-  // Usuario que hace el comentario (puede ser fan o creador)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Creador que recibe el comentario (su perfil)
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  // Contenido del comentario
-  content     String
-  
-  // Estado de aprobación - los comentarios requieren aprobación del creador
-  isApproved  Boolean  @default(false)
-  
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([creatorId])
-  @@index([userId])
-  @@index([isApproved])
-  @@index([createdAt])
-}
-
-// Favoritos - Creadores que un usuario sigue/guarda
-model Favorite {
-  id          String   @id @default(uuid())
-  
-  // Usuario que agrega a favoritos
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Creador que es agregado como favorito
-  creatorId   String
-  creator     Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
-
-  // Un usuario solo puede tener un creador como favorito una vez
-  @@unique([userId, creatorId])
-  @@index([userId])
-  @@index([creatorId])
-}
-
-// ===========================================================
-// SISTEMA DE PAGOS Y COMISIONES
-// ===========================================================
-
-// Historial de cambios de tier (auditoría VIP)
-model CreatorTierHistory {
-  id            String      @id @default(uuid())
-  creatorId     String
-  creator       Creator     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  previousTier  CreatorTier
-  newTier       CreatorTier
-  reason        String?     // "PROMOTED_BY_SYSTEM", "DEMOTED_LOW_REVENUE", "ADMIN_OVERRIDE"
-  changedBy     String?     // userId del admin o "SYSTEM"
-  
-  effectiveFrom DateTime    @default(now())
-  createdAt     DateTime    @default(now())
-
-  @@index([creatorId])
-  @@index([effectiveFrom])
-}
-
-// Tarifas de la plataforma (versionadas)
-model FeeSchedule {
-  id                     String          @id @default(uuid())
-  effectiveFrom          DateTime
-  
-  // Comisiones en basis points (1000 = 10%, 700 = 7%)
-  standardPlatformFeeBps Int             @default(1000)
-  vipPlatformFeeBps      Int             @default(700)
-  
-  // Configuración de pagos
-  holdDays               Int             @default(7)
-  minPayoutClp           BigInt          @default(20000)
-  payoutFrequency        PayoutFrequency @default(WEEKLY)
-  
-  // Metadata
-  description            String?
-  createdBy              String?
-  createdAt              DateTime        @default(now())
-  
-  // Relación con transacciones que usaron esta tarifa
-  transactions           Transaction[]
-
-  @@index([effectiveFrom(sort: Desc)])
-}
-
-// Cuentas bancarias de creadores
-model CreatorBankAccount {
-  id                String    @id @default(uuid())
-  creatorId         String
-  creator           Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  bankCode          String    // Código banco Chile (001=Banco de Chile, 012=Banco Estado, etc)
-  bankName          String    // Nombre legible
-  accountType       String    // "CORRIENTE", "VISTA", "AHORRO"
-  
-  // NOTA: En producción, estos campos deben estar encriptados
-  accountNumber     String
-  accountHolderName String
-  accountHolderRut  String    // Formato: 12.345.678-9
-  
-  isDefault         Boolean   @default(true)
-  isVerified        Boolean   @default(false)
-  verifiedAt        DateTime?
-  
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  deletedAt         DateTime? // Soft delete
-
-  @@index([creatorId])
-  @@index([isDefault])
-}
-
-// Productos (lo que compra el fan)
-model Product {
-  id          String      @id @default(uuid())
-  creatorId   String
-  creator     Creator     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  type        ProductType
-  title       String?
-  description String?
-  
-  // Precio en CLP (BigInt para evitar problemas de precisión)
-  priceClp    BigInt
-  
-  // Metadata adicional (ej: duración suscripción, postId para PPV)
-  metadata    Json        @default("{}")
-  
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  deletedAt   DateTime?   // Soft delete
-  
-  transactions Transaction[]
-
-  @@index([creatorId])
-  @@index([type])
-  @@index([isActive])
-}
-
-// Transacciones (pagos exitosos)
-model Transaction {
-  id                    String            @id @default(uuid())
-  creatorId             String
-  creator               Creator           @relation(fields: [creatorId], references: [id])
-  
-  fanUserId             String
-  
-  productId             String?
-  product               Product?          @relation(fields: [productId], references: [id])
-  productType           ProductType
-  
-  currency              String            @default("CLP")
-  
-  // Montos en CLP (BigInt)
-  grossAmount           BigInt            // Monto bruto pagado por el fan
-  
-  // Tarifa aplicada (INMUTABLE - no recalcular)
-  appliedFeeScheduleId  String
-  appliedFeeSchedule    FeeSchedule       @relation(fields: [appliedFeeScheduleId], references: [id])
-  appliedPlatformFeeBps Int               // bps aplicados (1000 o 700)
-  platformFeeAmount     BigInt            // Comisión Apapacho
-  
-  // Fee del procesador (si aplica)
-  processorFeeAmount    BigInt            @default(0)
-  
-  // Monto que recibe el creador
-  creatorPayableAmount  BigInt
-  
-  status                TransactionStatus @default(SUCCEEDED)
-  occurredAt            DateTime          @default(now())
-  
-  // Proveedor de pagos
-  provider              String            // "TRANSBANK", "FLOW", "MERCADOPAGO"
-  providerPaymentId     String
-  providerEventId       String            @unique // IDEMPOTENCIA
-  
-  // Metadata del pago
-  metadata              Json              @default("{}")
-  
-  createdAt             DateTime          @default(now())
-  
-  // Relaciones
-  ledgerEntries         LedgerEntry[]
-  payoutItems           PayoutItem[]
-  chargebacks           Chargeback[]
-
-  @@index([creatorId, occurredAt(sort: Desc)])
-  @@index([fanUserId])
-  @@index([status])
-  @@index([providerPaymentId])
-}
-
-// Catálogo de cuentas contables
-model LedgerAccount {
-  id      String        @id @default(uuid())
-  code    String        @unique
-  name    String
-  type    String        // "ASSET", "LIABILITY", "REVENUE", "EXPENSE"
-  
-  entries LedgerEntry[]
-}
-
-// Asientos contables (doble partida)
-model LedgerEntry {
-  id            String        @id @default(uuid())
-  
-  transactionId String?
-  transaction   Transaction?  @relation(fields: [transactionId], references: [id])
-  
-  payoutId      String?
-  payout        Payout?       @relation(fields: [payoutId], references: [id])
-  
-  accountId     String
-  account       LedgerAccount @relation(fields: [accountId], references: [id])
-  
-  // Creador asociado (null para cuentas globales como PLATFORM_REVENUE)
-  creatorId     String?
-  creator       Creator?      @relation(fields: [creatorId], references: [id])
-  
-  currency      String        @default("CLP")
-  
-  // Solo uno puede ser > 0 (validar en código)
-  debit         BigInt        @default(0)
-  credit        BigInt        @default(0)
-  
-  description   String?
-  
-  createdAt     DateTime      @default(now())
-
-  @@index([transactionId])
-  @@index([payoutId])
-  @@index([creatorId, createdAt(sort: Desc)])
-  @@index([accountId])
-}
-
-// Pagos a creadores
-model Payout {
-  id                 String       @id @default(uuid())
-  creatorId          String
-  creator            Creator      @relation(fields: [creatorId], references: [id])
-  
-  periodStart        DateTime
-  periodEnd          DateTime
-  
-  currency           String       @default("CLP")
-  
-  // Totales calculados
-  grossTotal         BigInt       @default(0)
-  platformFeeTotal   BigInt       @default(0)
-  adjustmentsTotal   BigInt       @default(0)  // Refunds, chargebacks
-  payoutAmount       BigInt       @default(0)  // Monto final a transferir
-  
-  status             PayoutStatus @default(CALCULATED)
-  
-  // Ejecución
-  sentAt             DateTime?
-  failedAt           DateTime?
-  failureReason      String?
-  
-  // Retry
-  retryCount         Int          @default(0)
-  nextRetryAt        DateTime?
-  
-  // Proveedor transferencia
-  providerTransferId String?
-  
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  
-  items              PayoutItem[]
-  ledgerEntries      LedgerEntry[]
-
-  @@index([creatorId, periodEnd(sort: Desc)])
-  @@index([status])
-  @@index([nextRetryAt])
-}
-
-// Detalle de transacciones incluidas en payout
-model PayoutItem {
-  id            String      @id @default(uuid())
-  payoutId      String
-  payout        Payout      @relation(fields: [payoutId], references: [id], onDelete: Cascade)
-  
-  transactionId String
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
-  
-  amount        BigInt
-  createdAt     DateTime    @default(now())
-
-  @@unique([payoutId, transactionId])
-  @@index([transactionId])
-}
-
-// Contracargos
-model Chargeback {
-  id              String           @id @default(uuid())
-  transactionId   String
-  transaction     Transaction      @relation(fields: [transactionId], references: [id])
-  
-  provider        String
-  providerCaseId  String           @unique  // IDEMPOTENCIA
-  
-  amount          BigInt
-  reason          String?
-  
-  status          ChargebackStatus @default(RECEIVED)
-  
-  occurredAt      DateTime         @default(now())
-  resolvedAt      DateTime?
-  
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-
-  @@index([transactionId])
-  @@index([status])
-}
-
-// Cola de eventos (Outbox Pattern)
-model OutboxEvent {
-  id            String    @id @default(uuid())
-  
-  aggregateType String    // "Transaction", "Payout", "Chargeback"
-  aggregateId   String
-  eventType     String    // "TransactionCreated", "PayoutCalculated", etc.
-  
-  payload       Json
-  
-  createdAt     DateTime  @default(now())
-  publishedAt   DateTime? // null = pendiente de publicar
-  
-  // Retry info
-  retryCount    Int       @default(0)
-  lastError     String?
-
-  @@index([publishedAt, createdAt])
-  @@index([aggregateType, aggregateId])
-  @@index([retryCount])
 }
