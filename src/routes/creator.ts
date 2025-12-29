@@ -18,11 +18,15 @@ const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFil
   }
 }
 
+// Configure multer for profile images - permite cualquier campo de texto
 const profileUpload = multer({
   storage: profileImageStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: imageFilter
-})
+}).fields([
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'coverImage', maxCount: 1 }
+])
 
 // Middleware to verify JWT and get user
 const authenticate = async (req: Request, res: Response, next: Function) => {
@@ -262,10 +266,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 })
 
 // Update creator profile (authenticated)
-router.put('/profile', authenticate, profileUpload.fields([
-  { name: 'profileImage', maxCount: 1 },
-  { name: 'coverImage', maxCount: 1 }
-]), async (req: Request, res: Response) => {
+router.put('/profile', authenticate, profileUpload, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
     const files = req.files as { [fieldname: string]: Express.Multer.File[] }
