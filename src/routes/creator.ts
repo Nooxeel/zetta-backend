@@ -1,39 +1,27 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
-import multer from 'multer'
 import prisma from '../lib/prisma'
-import { profileImageStorage } from '../lib/cloudinary'
 
 const router = Router()
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
 
-// TEMP: Usar memoryStorage simple para debug - SIN filtros, SIN cloudinary
-const profileUploadAny = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }
-}).any()
-
 // Middleware to verify JWT and get user
 const authenticate = async (req: Request, res: Response, next: Function) => {
   try {
-    console.log('[AUTH] Checking authorization header...')
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[AUTH] No token provided')
       return res.status(401).json({ error: 'No token provided' })
     }
 
     const token = authHeader.split(' ')[1]
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator: boolean }
     
-    console.log('[AUTH] Token decoded, userId:', decoded.userId)
     ;(req as any).userId = decoded.userId
     ;(req as any).isCreator = decoded.isCreator
     
     next()
   } catch (error) {
-    console.log('[AUTH] Token verification failed:', error)
     res.status(401).json({ error: 'Invalid token' })
   }
 }
@@ -251,31 +239,10 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 })
 
-// Update creator profile (authenticated)
-router.put('/profile', authenticate, (req, res, next) => {
-  console.log('🔍 [DEBUG] === INICIO PUT /profile ===')
-  console.log('🔍 [DEBUG] Headers:', JSON.stringify(req.headers, null, 2))
-  console.log('🔍 [DEBUG] Content-Type:', req.headers['content-type'])
-  console.log('🔍 [DEBUG] Method:', req.method)
-  console.log('🔍 [DEBUG] URL:', req.url)
-  next()
-}, profileUploadAny, async (req: Request, res: Response) => {
-  console.log('✅ [DEBUG] === DESPUÉS DE MULTER ===')
-  console.log('✅ [DEBUG] Files received:', req.files)
-  console.log('✅ [DEBUG] Body received:', req.body)
+// Update creator profile (authenticated) - JSON only, images use /upload endpoints
+router.put('/profile', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
-    const files = req.files as Express.Multer.File[]
-    
-    // Validar que solo vengan los archivos esperados
-    if (files && Array.isArray(files)) {
-      const allowedFields = ['profileImage', 'coverImage']
-      const hasInvalidFile = files.some(f => !allowedFields.includes(f.fieldname))
-      
-      if (hasInvalidFile) {
-        return res.status(400).json({ error: 'Invalid file field name' })
-      }
-    }
     
     const {
       bio,
@@ -287,24 +254,6 @@ router.put('/profile', authenticate, (req, res, next) => {
       fontFamily,
       coverImage
     } = req.body
-
-    // Get uploaded file URLs from Cloudinary
-    let profileImageUrl = null
-    let coverImageUrl = null
-
-    // Buscar los archivos por fieldname
-    if (files && Array.isArray(files)) {
-      const profileImg = files.find(f => f.fieldname === 'profileImage')
-      const coverImg = files.find(f => f.fieldname === 'coverImage')
-      
-      if (profileImg) {
-        profileImageUrl = profileImg.path
-      }
-      
-      if (coverImg) {
-        coverImageUrl = coverImg.path
-      }
-    }
 
     // Get creator profile
     const creator = await prisma.creator.findUnique({
@@ -361,12 +310,9 @@ router.put('/profile', authenticate, (req, res, next) => {
       fontFamily
     }
 
-    // Add image URLs if uploaded
-    if (profileImageUrl) {
-      updateData.profileImage = profileImageUrl
-    }
-    if (coverImageUrl || coverImage) {
-      updateData.coverImage = coverImageUrl || coverImage
+    // Add coverImage if provided
+    if (coverImage) {
+      updateData.coverImage = coverImage
     }
 
     const [updated] = await prisma.$transaction([
