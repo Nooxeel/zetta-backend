@@ -18,15 +18,12 @@ const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFil
   }
 }
 
-// Configure multer for profile images - permite cualquier campo de texto
-const profileUpload = multer({
+// Configure multer for profile images - acepta cualquier archivo
+const profileUploadAny = multer({
   storage: profileImageStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: imageFilter
-}).fields([
-  { name: 'profileImage', maxCount: 1 },
-  { name: 'coverImage', maxCount: 1 }
-])
+}).any()
 
 // Middleware to verify JWT and get user
 const authenticate = async (req: Request, res: Response, next: Function) => {
@@ -266,10 +263,10 @@ router.get('/:id', async (req: Request, res: Response) => {
 })
 
 // Update creator profile (authenticated)
-router.put('/profile', authenticate, profileUpload, async (req: Request, res: Response) => {
+router.put('/profile', authenticate, profileUploadAny, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] }
+    const files = req.files as Express.Multer.File[]
     
     const {
       bio,
@@ -286,12 +283,18 @@ router.put('/profile', authenticate, profileUpload, async (req: Request, res: Re
     let profileImageUrl = null
     let coverImageUrl = null
 
-    if (files?.profileImage?.[0]) {
-      profileImageUrl = files.profileImage[0].path
-    }
-
-    if (files?.coverImage?.[0]) {
-      coverImageUrl = files.coverImage[0].path
+    // Buscar los archivos por fieldname
+    if (files && Array.isArray(files)) {
+      const profileImg = files.find(f => f.fieldname === 'profileImage')
+      const coverImg = files.find(f => f.fieldname === 'coverImage')
+      
+      if (profileImg) {
+        profileImageUrl = profileImg.path
+      }
+      
+      if (coverImg) {
+        coverImageUrl = coverImg.path
+      }
     }
 
     // Get creator profile
