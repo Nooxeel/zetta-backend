@@ -263,10 +263,30 @@ router.get('/:id', async (req: Request, res: Response) => {
 })
 
 // Update creator profile (authenticated)
-router.put('/profile', authenticate, profileUploadAny, async (req: Request, res: Response) => {
+router.put('/profile', authenticate, (req, res, next) => {
+  console.log('=== PUT /profile REQUEST ===')
+  console.log('Headers:', req.headers)
+  console.log('Content-Type:', req.headers['content-type'])
+  next()
+}, profileUploadAny, (req: Request, res: Response) => {
+  console.log('=== AFTER MULTER ===')
+  console.log('Files received:', req.files)
+  console.log('Body received:', req.body)
+  res.send('OK')
+}, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
     const files = req.files as Express.Multer.File[]
+    
+    // Validar que solo vengan los archivos esperados
+    if (files && Array.isArray(files)) {
+      const allowedFields = ['profileImage', 'coverImage']
+      const hasInvalidFile = files.some(f => !allowedFields.includes(f.fieldname))
+      
+      if (hasInvalidFile) {
+        return res.status(400).json({ error: 'Invalid file field name' })
+      }
+    }
     
     const {
       bio,
