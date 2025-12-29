@@ -31,7 +31,19 @@ app.set('trust proxy', 1)
 
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? [FRONTEND_URL, 'https://apapacho-backend-production.up.railway.app'] : FRONTEND_URL,
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://apapacho-lilac.vercel.app',
+      FRONTEND_URL
+    ]
+    // Allow all Vercel preview deployments
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true
 }))
 app.use(express.json())
