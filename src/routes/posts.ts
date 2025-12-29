@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
 import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
 
 const router = Router()

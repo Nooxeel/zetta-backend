@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import jwt from 'jsonwebtoken'
+import path from 'path'
 import prisma from '../lib/prisma'
 import { profileImageStorage, cloudinary } from '../lib/cloudinary'
 
