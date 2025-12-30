@@ -22,6 +22,12 @@ model User {
   donationsSent  Donation[]
   favorites      Favorite[]
   subscriptions  Subscription[]
+  // Conversations where user is participant1
+  conversationsAsP1  Conversation[] @relation("Participant1")
+  // Conversations where user is participant2
+  conversationsAsP2  Conversation[] @relation("Participant2")
+  // Messages sent by user
+  messagesSent       Message[] @relation("MessagesSent")
 }
 
 model Creator {
@@ -44,7 +50,7 @@ model Creator {
   status             CreatorStatus        @default(ACTIVE)
   tier               CreatorTier          @default(STANDARD)
   // Configuración de visibilidad de secciones (JSON)
-  visibilitySettings Json                 @default("{\"tabs\":{\"likes\":true,\"posts\":true,\"photos\":true,\"videos\":true,\"audio\":true,\"guestbook\":true}}")
+  visibilitySettings Json                 @default("{\"tabs\":{\"likes\":true,\"posts\":true,\"photos\":true,\"videos\":true,\"audio\":true,\"guestbook\":true},\"messaging\":\"logged_in\"}")
   tierEffectiveFrom  DateTime             @default(now())
   comments           Comment[]
   user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -454,4 +460,52 @@ enum ChargebackStatus {
   WON
   LOST
   REVERSED
+}
+
+// ==================== MESSAGING SYSTEM ====================
+
+model Conversation {
+  id                 String    @id @default(uuid())
+  participant1Id     String    // Always the one who initiated (usually fan)
+  participant2Id     String    // The other participant (usually creator)
+  lastMessageAt      DateTime  @default(now())
+  participant1Unread Int       @default(0)
+  participant2Unread Int       @default(0)
+  // Status: active, archived, blocked
+  status             String    @default("active")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  participant1       User      @relation("Participant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+  participant2       User      @relation("Participant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+  messages           Message[]
+
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id])
+  @@index([participant2Id])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String    @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  // Type: TEXT, IMAGE, VIDEO, TIP, PAID_CONTENT
+  type           String    @default("TEXT")
+  // For paid content messages
+  price          Float?
+  isPurchased    Boolean   @default(false)
+  // Read tracking
+  readAt         DateTime?
+  // Soft delete
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
 }

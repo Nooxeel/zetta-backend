@@ -18,6 +18,7 @@ import balanceRoutes from './routes/balance'
 import payoutsRoutes from './routes/payouts'
 import webhooksRoutes from './routes/webhooks'
 import adminRoutes from './routes/admin'
+import messagesRoutes from './routes/messages'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -64,6 +65,7 @@ app.use('/api/creator', balanceRoutes)
 app.use('/api/payouts', payoutsRoutes)
 app.use('/api/webhooks', webhooksRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/messages', messagesRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
