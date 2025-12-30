@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { prisma } from '../lib/prisma'
+import prisma from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
 
 const router = Router()
@@ -312,7 +312,7 @@ router.get('/unread-count', authenticate, async (req: Request, res: Response) =>
       }
     })
 
-    const totalUnread = conversations.reduce((sum, conv) => {
+    const totalUnread = conversations.reduce((sum: number, conv: { participant1Id: string; participant1Unread: number; participant2Unread: number }) => {
       const isParticipant1 = conv.participant1Id === userId
       return sum + (isParticipant1 ? conv.participant1Unread : conv.participant2Unread)
     }, 0)
