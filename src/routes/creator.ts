@@ -252,7 +252,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       accentColor,
       textColor,
       fontFamily,
-      coverImage
+      coverImage,
+      visibilitySettings
     } = req.body
 
     // Get creator profile
@@ -307,7 +308,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       backgroundImage,
       accentColor,
       textColor,
-      fontFamily
+      fontFamily,
+      visibilitySettings
     }
 
     // Add coverImage if provided
