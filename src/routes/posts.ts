@@ -114,20 +114,22 @@ router.get('/my-posts', authenticate, async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/posts - Obtener posts de un creador
+// GET /api/posts - Obtener posts de un creador con paginación
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { creatorId, visibility } = req.query
+    const { creatorId, visibility, cursor, limit = '10' } = req.query
 
     const where: any = {}
-    
+
     if (creatorId) {
       where.creatorId = creatorId as string
     }
-    
+
     if (visibility) {
       where.visibility = visibility as string
     }
+
+    const take = Math.min(parseInt(limit as string), 50) // Max 50 posts per page
 
     const posts = await prisma.post.findMany({
       where,
@@ -144,16 +146,26 @@ router.get('/', async (req: Request, res: Response) => {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: take + 1, // Fetch one extra to check if there are more
+      ...(cursor ? { cursor: { id: cursor as string }, skip: 1 } : {})
     })
 
+    const hasMore = posts.length > take
+    const postsToReturn = hasMore ? posts.slice(0, take) : posts
+    const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null
+
     // Parse content JSON
-    const formatted = posts.map(post => ({
+    const formatted = postsToReturn.map(post => ({
       ...post,
       content: JSON.parse(post.content)
     }))
 
-    res.json(formatted)
+    res.json({
+      posts: formatted,
+      nextCursor,
+      hasMore
+    })
   } catch (error) {
     console.error('Get posts error:', error)
     res.status(500).json({ error: 'Failed to get posts' })
