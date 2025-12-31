@@ -31,6 +31,8 @@ model User {
   // Post interactions
   postLikes          PostLike[]
   postComments       PostComment[]
+  // User interests
+  interests          UserInterest[]
 }
 
 model Creator {
@@ -71,6 +73,8 @@ model Creator {
   subscribers        Subscription[]
   subscriptionTiers  SubscriptionTier[]
   transactions       Transaction[]
+  // Creator interests
+  interests          CreatorInterest[]
 }
 
 model MusicTrack {
@@ -554,4 +558,65 @@ model PostComment {
   @@index([userId])
   @@index([createdAt])
   @@index([deletedAt])
+}
+
+// ==================== INTERESTS/TAGS SYSTEM ====================
+
+model Interest {
+  id          String            @id @default(uuid())
+  slug        String            @unique
+  name        String
+  description String?
+  icon        String?
+  category    InterestCategory
+  isNSFW      Boolean           @default(false)
+  usageCount  Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  userInterests    UserInterest[]
+  creatorInterests CreatorInterest[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([usageCount(sort: Desc)])
+}
+
+model UserInterest {
+  id         String   @id @default(uuid())
+  userId     String
+  interestId String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interestId])
+  @@index([userId])
+  @@index([interestId])
+}
+
+model CreatorInterest {
+  id         String   @id @default(uuid())
+  creatorId  String
+  interestId String
+  createdAt  DateTime @default(now())
+
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, interestId])
+  @@index([creatorId])
+  @@index([interestId])
+}
+
+enum InterestCategory {
+  ENTERTAINMENT
+  LIFESTYLE
+  ADULT
+  ART
+  GAMING
+  MUSIC
+  FITNESS
+  OTHER
 }
