@@ -174,6 +174,27 @@ router.get('/me/stats', authenticate, async (req: Request, res: Response): Promi
   }
 });
 
+// GET /api/subscriptions/check/:creatorId - Verificar si el usuario está suscrito a un creador
+router.get('/subscriptions/check/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.userId;
+    const { creatorId } = req.params;
+
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        creatorId,
+        status: 'active'
+      }
+    });
+
+    res.json({ isSubscribed: !!subscription });
+  } catch (error) {
+    console.error('Error al verificar suscripción:', error);
+    res.status(500).json({ error: 'Error al verificar suscripción' });
+  }
+});
+
 // GET /api/users/me/payments - Obtener historial de pagos del usuario
 router.get('/me/payments', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {

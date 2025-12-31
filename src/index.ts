@@ -60,6 +60,7 @@ app.use('/api/upload', uploadRoutes)
 app.use('/api/comments', commentsRoutes)
 app.use('/api/favorites', favoritesRoutes)
 app.use('/api/users', usersRoutes)
+app.use('/api/subscriptions', usersRoutes) // Alias para compatibilidad
 app.use('/api/posts', postsRoutes)
 app.use('/api/creator', balanceRoutes)
 app.use('/api/payouts', payoutsRoutes)
