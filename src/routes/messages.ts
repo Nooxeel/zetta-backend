@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
+import { io } from '../index'
 
 const router = Router()
 
@@ -277,13 +278,23 @@ router.post('/conversations/:conversationId/messages', authenticate, async (req:
         data: {
           lastMessageAt: new Date(),
           // Increment unread count for the OTHER participant
-          ...(isParticipant1 
+          ...(isParticipant1
             ? { participant2Unread: { increment: 1 } }
             : { participant1Unread: { increment: 1 } }
           )
         }
       })
     ])
+
+    // Emit WebSocket event to conversation room
+    io.to(`conversation:${conversationId}`).emit('message:new', message)
+
+    // Emit unread count update to the recipient
+    const recipientId = isParticipant1 ? conversation.participant2Id : conversation.participant1Id
+    io.to(`user:${recipientId}`).emit('unread:update', {
+      conversationId,
+      unreadCount: isParticipant1 ? conversation.participant2Unread + 1 : conversation.participant1Unread + 1
+    })
 
     res.status(201).json(message)
   } catch (error) {

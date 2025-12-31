@@ -5,6 +5,7 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
+import { io } from '../index'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -445,8 +446,19 @@ router.post('/:id/like', authenticate, async (req: Request, res: Response) => {
       ])
 
       const updatedPost = await prisma.post.findUnique({
-        where: { id: postId }
+        where: { id: postId },
+        include: { creator: { select: { userId: true } } }
       })
+
+      // Emit WebSocket event to creator
+      if (updatedPost) {
+        io.to(`user:${updatedPost.creator.userId}`).emit('stats:update', {
+          type: 'like',
+          action: 'remove',
+          postId,
+          totalLikes: updatedPost.likes
+        })
+      }
 
       return res.json({
         liked: false,
@@ -468,8 +480,19 @@ router.post('/:id/like', authenticate, async (req: Request, res: Response) => {
       ])
 
       const updatedPost = await prisma.post.findUnique({
-        where: { id: postId }
+        where: { id: postId },
+        include: { creator: { select: { userId: true } } }
       })
+
+      // Emit WebSocket event to creator
+      if (updatedPost) {
+        io.to(`user:${updatedPost.creator.userId}`).emit('stats:update', {
+          type: 'like',
+          action: 'add',
+          postId,
+          totalLikes: updatedPost.likes
+        })
+      }
 
       return res.json({
         liked: true,

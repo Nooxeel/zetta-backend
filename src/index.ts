@@ -2,6 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import path from 'path'
 import dotenv from 'dotenv'
+import { createServer } from 'http'
+import { Server as SocketIOServer } from 'socket.io'
 
 // Load environment variables
 dotenv.config()
@@ -84,9 +86,60 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: 'Something went wrong!' })
 })
 
-app.listen(PORT, () => {
+// Create HTTP server and attach Socket.IO
+const httpServer = createServer(app)
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'https://apapacho-lilac.vercel.app',
+        FRONTEND_URL
+      ]
+      if (!origin || allowedOrigins.includes(origin) || origin?.endsWith('.vercel.app')) {
+        callback(null, true)
+      } else {
+        callback(new Error('Not allowed by CORS'))
+      }
+    },
+    credentials: true
+  }
+})
+
+// WebSocket connection handling
+io.on('connection', (socket) => {
+  console.log(`✅ Client connected: ${socket.id}`)
+
+  // Join user-specific room
+  socket.on('join:user', (userId: string) => {
+    socket.join(`user:${userId}`)
+    console.log(`User ${userId} joined their room`)
+  })
+
+  // Join conversation room
+  socket.on('join:conversation', (conversationId: string) => {
+    socket.join(`conversation:${conversationId}`)
+    console.log(`Socket ${socket.id} joined conversation ${conversationId}`)
+  })
+
+  // Leave conversation room
+  socket.on('leave:conversation', (conversationId: string) => {
+    socket.leave(`conversation:${conversationId}`)
+    console.log(`Socket ${socket.id} left conversation ${conversationId}`)
+  })
+
+  socket.on('disconnect', () => {
+    console.log(`❌ Client disconnected: ${socket.id}`)
+  })
+})
+
+// Make io available to routes
+export { io }
+
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`)
-  
+  console.log(`🔌 WebSocket server ready`)
+
   // Iniciar scheduler de jobs
   startScheduler()
 })
