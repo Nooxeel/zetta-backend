@@ -405,4 +405,257 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
   }
 })
 
+// ==================== POST LIKES ====================
+
+// POST /api/posts/:id/like - Toggle like on a post
+router.post('/:id/like', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId
+    const { id: postId } = req.params
+
+    // Verificar que el post existe
+    const post = await prisma.post.findUnique({
+      where: { id: postId }
+    })
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' })
+    }
+
+    // Buscar like existente
+    const existingLike = await prisma.postLike.findUnique({
+      where: {
+        postId_userId: {
+          postId,
+          userId
+        }
+      }
+    })
+
+    if (existingLike) {
+      // Unlike: eliminar like y decrementar contador
+      await prisma.$transaction([
+        prisma.postLike.delete({
+          where: { id: existingLike.id }
+        }),
+        prisma.post.update({
+          where: { id: postId },
+          data: { likes: { decrement: 1 } }
+        })
+      ])
+
+      const updatedPost = await prisma.post.findUnique({
+        where: { id: postId }
+      })
+
+      return res.json({
+        liked: false,
+        likes: updatedPost?.likes || 0
+      })
+    } else {
+      // Like: crear like e incrementar contador
+      await prisma.$transaction([
+        prisma.postLike.create({
+          data: {
+            postId,
+            userId
+          }
+        }),
+        prisma.post.update({
+          where: { id: postId },
+          data: { likes: { increment: 1 } }
+        })
+      ])
+
+      const updatedPost = await prisma.post.findUnique({
+        where: { id: postId }
+      })
+
+      return res.json({
+        liked: true,
+        likes: updatedPost?.likes || 0
+      })
+    }
+  } catch (error) {
+    console.error('Toggle like error:', error)
+    res.status(500).json({ error: 'Failed to toggle like' })
+  }
+})
+
+// GET /api/posts/:id/like-status - Check if current user liked a post
+router.get('/:id/like-status', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId
+    const { id: postId } = req.params
+
+    const like = await prisma.postLike.findUnique({
+      where: {
+        postId_userId: {
+          postId,
+          userId
+        }
+      }
+    })
+
+    res.json({
+      liked: !!like
+    })
+  } catch (error) {
+    console.error('Get like status error:', error)
+    res.status(500).json({ error: 'Failed to get like status' })
+  }
+})
+
+// ==================== POST COMMENTS ====================
+
+// GET /api/posts/:id/comments - Get comments for a post
+router.get('/:id/comments', async (req: Request, res: Response) => {
+  try {
+    const { id: postId } = req.params
+    const { limit = 50, offset = 0 } = req.query
+
+    const comments = await prisma.postComment.findMany({
+      where: {
+        postId,
+        deletedAt: null
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatar: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: Number(limit),
+      skip: Number(offset)
+    })
+
+    const total = await prisma.postComment.count({
+      where: {
+        postId,
+        deletedAt: null
+      }
+    })
+
+    res.json({
+      comments,
+      total
+    })
+  } catch (error) {
+    console.error('Get comments error:', error)
+    res.status(500).json({ error: 'Failed to get comments' })
+  }
+})
+
+// POST /api/posts/:id/comments - Create a comment
+router.post('/:id/comments', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId
+    const { id: postId } = req.params
+    const { content } = req.body
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment content is required' })
+    }
+
+    if (content.length > 1000) {
+      return res.status(400).json({ error: 'Comment is too long (max 1000 characters)' })
+    }
+
+    // Verificar que el post existe
+    const post = await prisma.post.findUnique({
+      where: { id: postId }
+    })
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' })
+    }
+
+    // Crear comentario e incrementar contador en una transacción
+    const [comment] = await prisma.$transaction([
+      prisma.postComment.create({
+        data: {
+          postId,
+          userId,
+          content: content.trim()
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true
+            }
+          }
+        }
+      }),
+      prisma.post.update({
+        where: { id: postId },
+        data: { comments: { increment: 1 } }
+      })
+    ])
+
+    res.json(comment)
+  } catch (error) {
+    console.error('Create comment error:', error)
+    res.status(500).json({ error: 'Failed to create comment' })
+  }
+})
+
+// DELETE /api/posts/comments/:commentId - Delete a comment
+router.delete('/comments/:commentId', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId
+    const { commentId } = req.params
+
+    // Buscar el comentario
+    const comment = await prisma.postComment.findUnique({
+      where: { id: commentId },
+      include: {
+        post: {
+          include: {
+            creator: true
+          }
+        }
+      }
+    })
+
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' })
+    }
+
+    // Verificar que el usuario es el autor del comentario o el creador del post
+    const isAuthor = comment.userId === userId
+    const isCreator = comment.post.creator.userId === userId
+
+    if (!isAuthor && !isCreator) {
+      return res.status(403).json({ error: 'Not authorized to delete this comment' })
+    }
+
+    // Soft delete y decrementar contador
+    await prisma.$transaction([
+      prisma.postComment.update({
+        where: { id: commentId },
+        data: { deletedAt: new Date() }
+      }),
+      prisma.post.update({
+        where: { id: comment.postId },
+        data: { comments: { decrement: 1 } }
+      })
+    ])
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Delete comment error:', error)
+    res.status(500).json({ error: 'Failed to delete comment' })
+  }
+})
+
 export default router
