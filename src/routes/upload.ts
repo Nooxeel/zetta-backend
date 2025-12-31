@@ -7,14 +7,39 @@ import { profileImageStorage, cloudinary } from '../lib/cloudinary'
 
 const router = Router()
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
+const JWT_SECRET = process.env.JWT_SECRET
 
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
+}
+
+// SECURITY: Validate image file types by magic bytes (not just MIME type)
+const validateImageMagicBytes = (buffer: Buffer): boolean => {
+  // Check for common image file signatures (magic bytes)
+  const magicNumbers = {
+    jpg: [0xFF, 0xD8, 0xFF],
+    png: [0x89, 0x50, 0x4E, 0x47],
+    gif: [0x47, 0x49, 0x46],
+    webp: [0x52, 0x49, 0x46, 0x46] // RIFF (WebP starts with RIFF)
+  }
+
+  // Check if buffer starts with any known image magic number
+  for (const [type, signature] of Object.entries(magicNumbers)) {
+    if (signature.every((byte, index) => buffer[index] === byte)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+// SECURITY: First line of defense - check MIME type (can be spoofed)
 const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-  if (allowedTypes.includes(file.mimetype)) {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+  if (allowedTypes.includes(file.mimetype.toLowerCase())) {
     cb(null, true)
   } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'))
+    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'))
   }
 }
 

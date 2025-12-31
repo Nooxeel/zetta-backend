@@ -91,14 +91,24 @@ const httpServer = createServer(app)
 const io = new SocketIOServer(httpServer, {
   cors: {
     origin: (origin, callback) => {
+      // SECURITY: Only allow specific domains, not all .vercel.app domains
       const allowedOrigins = [
         'http://localhost:3000',
         'https://apapacho-lilac.vercel.app',
         FRONTEND_URL
-      ]
-      if (!origin || allowedOrigins.includes(origin) || origin?.endsWith('.vercel.app')) {
+      ].filter(Boolean) // Remove undefined/null values
+
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) {
+        callback(null, true)
+        return
+      }
+
+      // Check if origin is in allowlist
+      if (allowedOrigins.includes(origin)) {
         callback(null, true)
       } else {
+        console.warn(`⚠️  CORS blocked WebSocket connection from: ${origin}`)
         callback(new Error('Not allowed by CORS'))
       }
     },

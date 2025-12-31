@@ -9,7 +9,11 @@ import { io } from '../index'
 
 const router = Router()
 const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET || 'apapacho-jwt-secret-2024'
+const JWT_SECRET = process.env.JWT_SECRET
+
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
+}
 
 // Middleware de autenticación
 const authenticate = async (req: Request, res: Response, next: Function) => {
@@ -35,6 +39,38 @@ const authenticate = async (req: Request, res: Response, next: Function) => {
   }
 }
 
+// SECURITY: Validate file types by magic bytes
+const validateVideoMagicBytes = (buffer: Buffer): boolean => {
+  const videoSignatures = {
+    mp4: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], // ftyp
+    webm: [0x1A, 0x45, 0xDF, 0xA3], // EBML
+    mov: [0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74], // ftypqt
+  }
+
+  for (const signature of Object.values(videoSignatures)) {
+    if (signature.every((byte, index) => buffer[index] === byte)) {
+      return true
+    }
+  }
+  return false
+}
+
+const validateImageMagicBytes = (buffer: Buffer): boolean => {
+  const imageSignatures = {
+    jpg: [0xFF, 0xD8, 0xFF],
+    png: [0x89, 0x50, 0x4E, 0x47],
+    gif: [0x47, 0x49, 0x46],
+    webp: [0x52, 0x49, 0x46, 0x46]
+  }
+
+  for (const signature of Object.values(imageSignatures)) {
+    if (signature.every((byte, index) => buffer[index] === byte)) {
+      return true
+    }
+  }
+  return false
+}
+
 // Configuración de multer para subir videos con Cloudinary
 const uploadVideo = multer({
   storage: postVideoStorage,
@@ -43,7 +79,7 @@ const uploadVideo = multer({
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']
-    if (allowedTypes.includes(file.mimetype)) {
+    if (allowedTypes.includes(file.mimetype.toLowerCase())) {
       cb(null, true)
     } else {
       cb(new Error('Invalid file type. Only MP4, WebM, MOV, and MKV videos are allowed.'))
@@ -59,7 +95,7 @@ const uploadImage = multer({
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    if (allowedTypes.includes(file.mimetype)) {
+    if (allowedTypes.includes(file.mimetype.toLowerCase())) {
       cb(null, true)
     } else {
       cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'))
