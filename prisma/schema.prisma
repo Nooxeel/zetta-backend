@@ -128,6 +128,9 @@ model Subscription {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, creatorId])
+  @@index([userId, status])
+  @@index([creatorId, status])
+  @@index([status])
 }
 
 model Post {
@@ -147,6 +150,9 @@ model Post {
   creator        Creator       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   postLikes      PostLike[]
   postComments   PostComment[]
+
+  @@index([creatorId, createdAt(sort: Desc)])
+  @@index([creatorId, visibility])
 }
 
 model Donation {

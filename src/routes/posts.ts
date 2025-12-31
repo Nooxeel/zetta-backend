@@ -506,6 +506,49 @@ router.get('/:id/like-status', authenticate, async (req: Request, res: Response)
   }
 })
 
+// GET /api/posts/like-status/batch?postIds=id1,id2,id3 - Check like status for multiple posts (fixes N+1)
+router.get('/like-status/batch', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId
+    const { postIds } = req.query
+
+    if (!postIds || typeof postIds !== 'string') {
+      return res.status(400).json({ error: 'postIds query parameter is required' })
+    }
+
+    const postIdArray = postIds.split(',').filter(id => id.trim())
+
+    if (postIdArray.length === 0) {
+      return res.json({})
+    }
+
+    // Single query to get all likes for this user on these posts
+    const likes = await prisma.postLike.findMany({
+      where: {
+        postId: { in: postIdArray },
+        userId
+      },
+      select: {
+        postId: true
+      }
+    })
+
+    // Convert to Set for O(1) lookup
+    const likedPostIds = new Set(likes.map((l: { postId: string }) => l.postId))
+
+    // Build response object: { postId: boolean }
+    const response = postIdArray.reduce((acc, postId) => {
+      acc[postId] = likedPostIds.has(postId)
+      return acc
+    }, {} as Record<string, boolean>)
+
+    res.json(response)
+  } catch (error) {
+    console.error('Get batch like status error:', error)
+    res.status(500).json({ error: 'Failed to get batch like status' })
+  }
+})
+
 // ==================== POST COMMENTS ====================
 
 // GET /api/posts/:id/comments - Get comments for a post
