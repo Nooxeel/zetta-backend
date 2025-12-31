@@ -452,4 +452,31 @@ router.get('/', async (req: Request, res: Response) => {
   }
 })
 
+// GET /api/creators/:id/stats - Get real-time stats for a creator
+router.get('/:id/stats', async (req: Request, res: Response) => {
+  try {
+    const { id: creatorId } = req.params
+
+    // Get total likes from all posts
+    const likesResult = await prisma.post.aggregate({
+      where: { creatorId },
+      _sum: { likes: true }
+    })
+
+    // Get total comments from all posts
+    const commentsResult = await prisma.post.aggregate({
+      where: { creatorId },
+      _sum: { comments: true }
+    })
+
+    res.json({
+      totalLikes: likesResult._sum.likes || 0,
+      totalPostComments: commentsResult._sum.comments || 0
+    })
+  } catch (error) {
+    console.error('Get creator stats error:', error)
+    res.status(500).json({ error: 'Failed to get creator stats' })
+  }
+})
+
 export default router
