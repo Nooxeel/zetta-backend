@@ -611,12 +611,8 @@ model CreatorInterest {
 }
 
 enum InterestCategory {
-  ENTERTAINMENT
-  LIFESTYLE
-  ADULT
-  ART
-  GAMING
-  MUSIC
-  FITNESS
-  OTHER
+  CONTENT_TYPE
+  AESTHETIC
+  THEMES
+  NICHE
 }
