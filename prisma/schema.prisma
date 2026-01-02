@@ -8,20 +8,25 @@ datasource db {
 }
 
 model User {
-  id             String         @id @default(uuid())
-  email          String         @unique
-  username       String         @unique
-  password       String
-  displayName    String
-  avatar         String?
-  isCreator      Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  comments       Comment[]
-  creatorProfile Creator?
-  donationsSent  Donation[]
-  favorites      Favorite[]
-  subscriptions  Subscription[]
+  id                 String         @id @default(uuid())
+  email              String         @unique
+  username           String         @unique
+  password           String
+  displayName        String
+  avatar             String?
+  bio                String?
+  coverImage         String?
+  backgroundColor    String         @default("#0f0f14")
+  backgroundGradient String?
+  accentColor        String         @default("#d946ef")
+  isCreator          Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  comments           Comment[]
+  creatorProfile     Creator?
+  donationsSent      Donation[]
+  favorites          Favorite[]
+  subscriptions      Subscription[]
   // Conversations where user is participant1
   conversationsAsP1  Conversation[] @relation("Participant1")
   // Conversations where user is participant2

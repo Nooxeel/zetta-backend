@@ -30,7 +30,7 @@ const authenticate = async (req: Request, res: Response, next: Function) => {
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
-    
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -39,16 +39,21 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
         username: true,
         displayName: true,
         avatar: true,
+        bio: true,
+        coverImage: true,
+        backgroundColor: true,
+        backgroundGradient: true,
+        accentColor: true,
         isCreator: true,
         createdAt: true
       }
     });
-    
+
     if (!user) {
       res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
-    
+
     res.json(user);
   } catch (error) {
     console.error('Error al obtener usuario:', error);
@@ -60,13 +65,17 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
 router.put('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
-    const { displayName, avatar } = req.body;
-    
+    const { displayName, avatar, bio, backgroundColor, backgroundGradient, accentColor } = req.body;
+
     const updateData: any = {};
-    
+
     if (displayName) updateData.displayName = displayName;
     if (avatar !== undefined) updateData.avatar = avatar;
-    
+    if (bio !== undefined) updateData.bio = bio;
+    if (backgroundColor) updateData.backgroundColor = backgroundColor;
+    if (backgroundGradient !== undefined) updateData.backgroundGradient = backgroundGradient;
+    if (accentColor) updateData.accentColor = accentColor;
+
     const user = await prisma.user.update({
       where: { id: userId },
       data: updateData,
@@ -76,10 +85,15 @@ router.put('/me', authenticate, async (req: Request, res: Response): Promise<voi
         username: true,
         displayName: true,
         avatar: true,
+        bio: true,
+        coverImage: true,
+        backgroundColor: true,
+        backgroundGradient: true,
+        accentColor: true,
         isCreator: true
       }
     });
-    
+
     res.json(user);
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
