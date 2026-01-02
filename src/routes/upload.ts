@@ -148,7 +148,7 @@ router.post('/profile', authenticate, profileUpload.single('profileImage'), asyn
   }
 })
 
-// Upload cover image
+// Upload cover image (for creators)
 router.post('/cover', authenticate, profileUpload.single('coverImage'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
@@ -191,12 +191,38 @@ router.post('/cover', authenticate, profileUpload.single('coverImage'), async (r
       })
     ])
 
-    res.json({ 
+    res.json({
       message: 'Cover image uploaded successfully',
-      url: coverUrl 
+      url: coverUrl
     })
   } catch (error) {
     console.error('Upload cover error:', error)
+    res.status(500).json({ error: 'Failed to upload cover image' })
+  }
+})
+
+// Upload cover image for fans (users)
+router.post('/user/cover', authenticate, profileUpload.single('coverImage'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' })
+    }
+
+    const userId = (req as any).userId
+    const coverUrl = (req.file as any).path // Cloudinary URL
+
+    // Update user cover image
+    await prisma.user.update({
+      where: { id: userId },
+      data: { coverImage: coverUrl }
+    })
+
+    res.json({
+      message: 'Cover image uploaded successfully',
+      url: coverUrl
+    })
+  } catch (error) {
+    console.error('Upload user cover error:', error)
     res.status(500).json({ error: 'Failed to upload cover image' })
   }
 })
