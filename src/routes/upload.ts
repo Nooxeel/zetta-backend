@@ -201,7 +201,9 @@ router.post('/cover', authenticate, profileUpload.single('coverImage'), async (r
   }
 })
 
-// Upload cover image for fans (users)
+// DISABLED: Fans should not be able to upload cover images (only profile avatar)
+// Upload cover image for fans (users) - COMMENTED OUT
+/*
 router.post('/user/cover', authenticate, profileUpload.single('coverImage'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
@@ -226,5 +228,6 @@ router.post('/user/cover', authenticate, profileUpload.single('coverImage'), asy
     res.status(500).json({ error: 'Failed to upload cover image' })
   }
 })
+*/
 
 export default router
