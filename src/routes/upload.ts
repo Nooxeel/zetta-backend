@@ -68,7 +68,7 @@ const authenticate = async (req: Request, res: Response, next: Function) => {
   }
 }
 
-// Upload avatar (saves to frontend public/images)
+// Upload avatar (saves to Cloudinary)
 router.post('/avatar', authenticate, profileUpload.single('avatar'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
@@ -76,8 +76,7 @@ router.post('/avatar', authenticate, profileUpload.single('avatar'), async (req:
     }
 
     const userId = (req as any).userId
-    const ext = path.extname(req.file.originalname)
-    const avatarUrl = `/images/${userId}/avatar${ext}`
+    const avatarUrl = (req.file as any).path // Cloudinary URL
 
     // Update user avatar
     await prisma.user.update({
