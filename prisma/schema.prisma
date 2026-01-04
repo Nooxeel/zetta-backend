@@ -98,11 +98,18 @@ model MusicTrack {
 model SocialLink {
   id        String   @id @default(uuid())
   creatorId String
-  platform  String
+  platform  String   // e.g., 'instagram', 'twitter', 'onlyfans', 'custom'
   url       String
-  label     String?
+  label     String?  // Custom label for the link
+  icon      String?  // Custom icon emoji or name
+  order     Int      @default(0)
+  isVisible Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   creator   Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId, order])
+  @@index([creatorId, isVisible])
 }
 
 model SubscriptionTier {
