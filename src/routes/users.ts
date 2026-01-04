@@ -44,6 +44,7 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
         backgroundColor: true,
         backgroundGradient: true,
         accentColor: true,
+        fontFamily: true,
         isCreator: true,
         createdAt: true
       }
@@ -65,7 +66,7 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
 router.put('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
-    const { displayName, avatar, bio, backgroundColor, backgroundGradient, accentColor } = req.body;
+    const { displayName, avatar, bio, backgroundColor, backgroundGradient, accentColor, fontFamily } = req.body;
 
     const updateData: any = {};
 
@@ -75,6 +76,7 @@ router.put('/me', authenticate, async (req: Request, res: Response): Promise<voi
     if (backgroundColor) updateData.backgroundColor = backgroundColor;
     if (backgroundGradient !== undefined) updateData.backgroundGradient = backgroundGradient;
     if (accentColor) updateData.accentColor = accentColor;
+    if (fontFamily) updateData.fontFamily = fontFamily;
 
     const user = await prisma.user.update({
       where: { id: userId },

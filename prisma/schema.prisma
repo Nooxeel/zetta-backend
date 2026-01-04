@@ -19,6 +19,7 @@ model User {
   backgroundColor    String         @default("#0f0f14")
   backgroundGradient String?
   accentColor        String         @default("#d946ef")
+  fontFamily         String         @default("Inter")
   isCreator          Boolean        @default(false)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
