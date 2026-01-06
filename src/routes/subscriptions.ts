@@ -271,6 +271,21 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
       return
     }
 
+    // Verificar que el usuario no sea el mismo creador
+    const creator = await prisma.creator.findUnique({
+      where: { id: creatorId }
+    })
+
+    if (!creator) {
+      res.status(404).json({ error: 'Creador no encontrado' })
+      return
+    }
+
+    if (creator.userId === userId) {
+      res.status(400).json({ error: 'No puedes suscribirte a tu propio perfil' })
+      return
+    }
+
     // Verificar que el tier existe y pertenece al creador
     const tier = await prisma.subscriptionTier.findFirst({
       where: {
@@ -281,7 +296,7 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
     })
 
     if (!tier) {
-      res.status(404).json({ error: 'Plan de suscripción no encontrado' })
+      res.status(404).json({ error: 'Plan de suscripción no encontrado o inactivo' })
       return
     }
 
@@ -299,15 +314,40 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
       return
     }
 
-    // Crear suscripción
-    // TODO: Integrar con pasarela de pagos real
+    // TODO: INTEGRACIÓN CON PASARELA DE PAGOS
+    // ==========================================
+    // 1. Crear orden de pago con la pasarela (Flow, Transbank, MercadoPago, etc.)
+    // 2. Redirigir al usuario a la URL de pago
+    // 3. Esperar confirmación vía webhook
+    // 4. Crear suscripción solo después de pago confirmado
+    // 
+    // Ejemplo con Flow:
+    // const paymentOrder = await flowAPI.createPayment({
+    //   amount: tier.price,
+    //   currency: tier.currency,
+    //   subject: `Suscripción ${tier.name} - ${creator.user.displayName}`,
+    //   email: user.email,
+    //   urlConfirmation: `${process.env.API_URL}/webhooks/flow/confirm`,
+    //   urlReturn: `${process.env.FRONTEND_URL}/${creator.user.username}?subscribed=true`
+    // })
+    // 
+    // res.json({
+    //   paymentUrl: paymentOrder.url,
+    //   token: paymentOrder.token
+    // })
+    // ==========================================
+
+    // POR AHORA: Aprobación automática para desarrollo/testing
+    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 días desde ahora
+    
     const subscription = await prisma.subscription.create({
       data: {
         userId,
         creatorId,
         tierId,
         status: 'active',
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 días
+        endDate,
+        autoRenew: true
       },
       include: {
         tier: true,
@@ -315,8 +355,10 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
           include: {
             user: {
               select: {
+                id: true,
                 username: true,
-                displayName: true
+                displayName: true,
+                avatar: true
               }
             }
           }
@@ -325,8 +367,25 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
     })
 
     res.status(201).json({
+      success: true,
       message: 'Suscripción creada exitosamente',
-      subscription
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        startDate: subscription.startDate,
+        endDate: subscription.endDate,
+        autoRenew: subscription.autoRenew,
+        tier: {
+          id: tier.id,
+          name: tier.name,
+          price: tier.price,
+          currency: tier.currency
+        },
+        creator: {
+          username: subscription.creator.user.username,
+          displayName: subscription.creator.user.displayName
+        }
+      }
     })
   } catch (error) {
     console.error('Error al suscribirse:', error)
