@@ -92,6 +92,7 @@ router.put('/me', authenticate, async (req: Request, res: Response): Promise<voi
         backgroundColor: true,
         backgroundGradient: true,
         accentColor: true,
+        fontFamily: true,
         isCreator: true
       }
     });

@@ -24,6 +24,7 @@ import messagesRoutes from './routes/messages'
 import interestsRoutes from './routes/interests'
 import discoverRoutes from './routes/discover'
 import socialLinksRoutes from './routes/socialLinks'
+import subscriptionsRoutes from './routes/subscriptions'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -65,7 +66,6 @@ app.use('/api/upload', uploadRoutes)
 app.use('/api/comments', commentsRoutes)
 app.use('/api/favorites', favoritesRoutes)
 app.use('/api/users', usersRoutes)
-app.use('/api/subscriptions', usersRoutes) // Alias para compatibilidad
 app.use('/api/posts', postsRoutes)
 app.use('/api/creator', balanceRoutes)
 app.use('/api/payouts', payoutsRoutes)
@@ -75,6 +75,7 @@ app.use('/api/messages', messagesRoutes)
 app.use('/api/interests', interestsRoutes)
 app.use('/api/discover', discoverRoutes)
 app.use('/api/sociallinks', socialLinksRoutes)
+app.use('/api/subscriptions', subscriptionsRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
