@@ -45,6 +45,7 @@ model Creator {
   id                 String               @id @default(uuid())
   userId             String               @unique
   bio                String?
+  bioTitle           String               @default("Acerca de mí")
   profileImage       String?
   coverImage         String?
   backgroundColor    String               @default("#0f0f14")

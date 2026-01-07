@@ -246,6 +246,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     
     const {
       bio,
+      bioTitle,
       backgroundColor,
       backgroundGradient,
       backgroundImage,
@@ -272,6 +273,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     // Fields to track for audit
     const fieldsToTrack = {
       bio,
+      bioTitle,
       backgroundColor,
       backgroundGradient,
       backgroundImage,
@@ -303,6 +305,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     // Update profile and create audit logs in transaction
     const updateData: any = {
       bio,
+      bioTitle,
       backgroundColor,
       backgroundGradient,
       backgroundImage,
