@@ -4,15 +4,14 @@
 -- Técnico: Juan Carlos Pulido
 -- =====================================================
 
--- 1. Create user (password hash for: Servitplus2026!)
+-- 1. Create user (password: Servitplus2026!)
 INSERT INTO "User" (
   id,
   username,
   "displayName",
   email,
-  "passwordHash",
-  role,
-  "emailVerified",
+  password,
+  "isCreator",
   "createdAt",
   "updatedAt"
 ) VALUES (
@@ -21,19 +20,19 @@ INSERT INTO "User" (
   'SERVITPLUS',
   'contacto@servitplus.cl',
   '$2b$10$WsYAq8uaikKtuFjQ4VcaQunmnjPnM8dZkzSoa.IzFOiPzPuhtkHL.',
-  'CREATOR',
   true,
   NOW(),
   NOW()
 ) ON CONFLICT (email) DO NOTHING
 RETURNING id;
 
--- Note: Get the user ID from above, then use it in the queries below
--- Or run this to get it: SELECT id FROM "User" WHERE username = 'servitplus';
+-- Get the user ID
+-- SELECT id FROM "User" WHERE username = 'servitplus';
 
--- 2. Create Creator Profile
+-- 2. Create Creator Profile (replace <USER_ID> with the ID from step 1)
 INSERT INTO "Creator" (
   id,
+  "userId",
   bio,
   "backgroundColor",
   "backgroundGradient",
@@ -42,6 +41,7 @@ INSERT INTO "Creator" (
   "updatedAt"
 )
 SELECT 
+  gen_random_uuid(),
   u.id,
   '🔧 GASFITERÍA INTEGRAL - SERVICIO TÉCNICO
 
@@ -72,7 +72,7 @@ Ursus Trotter • Splendid • Mademsa • Neckar • Junkers
   NOW()
 FROM "User" u
 WHERE u.username = 'servitplus'
-ON CONFLICT (id) DO UPDATE SET
+ON CONFLICT ("userId") DO UPDATE SET
   bio = EXCLUDED.bio,
   "backgroundColor" = EXCLUDED."backgroundColor",
   "backgroundGradient" = EXCLUDED."backgroundGradient",
@@ -92,7 +92,7 @@ INSERT INTO "SocialLink" (
 )
 SELECT 
   gen_random_uuid(),
-  u.id,
+  c.id,
   'phone',
   '+56995077828',
   'WhatsApp / Teléfono',
@@ -100,6 +100,7 @@ SELECT
   NOW(),
   NOW()
 FROM "User" u
+JOIN "Creator" c ON c."userId" = u.id
 WHERE u.username = 'servitplus'
 ON CONFLICT DO NOTHING;
 
@@ -115,7 +116,7 @@ INSERT INTO "SocialLink" (
 )
 SELECT 
   gen_random_uuid(),
-  u.id,
+  c.id,
   'whatsapp',
   'https://wa.me/56995077828',
   'Contactar por WhatsApp',
@@ -123,6 +124,7 @@ SELECT
   NOW(),
   NOW()
 FROM "User" u
+JOIN "Creator" c ON c."userId" = u.id
 WHERE u.username = 'servitplus'
 ON CONFLICT DO NOTHING;
 
@@ -138,7 +140,7 @@ INSERT INTO "SocialLink" (
 )
 SELECT 
   gen_random_uuid(),
-  u.id,
+  c.id,
   'email',
   'mailto:contacto@servitplus.cl',
   'Email',
@@ -146,23 +148,25 @@ SELECT
   NOW(),
   NOW()
 FROM "User" u
+JOIN "Creator" c ON c."userId" = u.id
 WHERE u.username = 'servitplus'
 ON CONFLICT DO NOTHING;
 
 -- 4. Verify account was created
 SELECT 
-  u.id,
+  u.id as "userId",
   u.username,
   u."displayName",
   u.email,
-  u.role,
+  u."isCreator",
+  c.id as "creatorId",
   c.bio IS NOT NULL as "hasProfile",
   COUNT(sl.id) as "socialLinksCount"
 FROM "User" u
-LEFT JOIN "Creator" c ON c.id = u.id
-LEFT JOIN "SocialLink" sl ON sl."creatorId" = u.id
+LEFT JOIN "Creator" c ON c."userId" = u.id
+LEFT JOIN "SocialLink" sl ON sl."creatorId" = c.id
 WHERE u.username = 'servitplus'
-GROUP BY u.id, u.username, u."displayName", u.email, u.role, c.bio;
+GROUP BY u.id, u.username, u."displayName", u.email, u."isCreator", c.id, c.bio;
 
 -- =====================================================
 -- ACCOUNT CREDENTIALS
@@ -170,6 +174,6 @@ GROUP BY u.id, u.username, u."displayName", u.email, u.role, c.bio;
 -- Email: contacto@servitplus.cl
 -- Username: servitplus
 -- Password: Servitplus2026!
--- Profile URL: https://tu-dominio.com/servitplus
+-- Profile URL: https://apapacho.com/servitplus
 -- Phone: +56 9 9507 7828
 -- =====================================================
