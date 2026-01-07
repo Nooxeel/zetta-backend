@@ -55,7 +55,7 @@ router.get('/my-tiers', authenticate, async (req: Request, res: Response): Promi
 router.post('/tiers', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).userId
-    const { name, description, price, currency, benefits } = req.body
+    const { name, description, price, currency, benefits, durationDays } = req.body
 
     // Validar campos requeridos
     if (!name || price === undefined || price === null) {
@@ -65,6 +65,14 @@ router.post('/tiers', authenticate, async (req: Request, res: Response): Promise
 
     if (price < 0) {
       res.status(400).json({ error: 'El precio no puede ser negativo' })
+      return
+    }
+
+    // Validar durationDays
+    const validDurations = [30, 90, 365]
+    const duration = durationDays || 30
+    if (!validDurations.includes(duration)) {
+      res.status(400).json({ error: 'Duración inválida. Debe ser 30, 90 o 365 días' })
       return
     }
 
@@ -90,6 +98,7 @@ router.post('/tiers', authenticate, async (req: Request, res: Response): Promise
         description: description || null,
         price: parseFloat(price),
         currency: currency || 'CLP',
+        durationDays: duration,
         benefits: benefits || '',
         order: existingTiers
       }
@@ -107,7 +116,7 @@ router.put('/tiers/:tierId', authenticate, async (req: Request, res: Response): 
   try {
     const userId = (req as any).userId
     const { tierId } = req.params
-    const { name, description, price, currency, benefits, isActive } = req.body
+    const { name, description, price, currency, benefits, isActive, durationDays } = req.body
 
     // Verificar que es creador
     const creator = await prisma.creator.findUnique({
@@ -136,6 +145,14 @@ router.put('/tiers/:tierId', authenticate, async (req: Request, res: Response): 
     if (currency !== undefined) updateData.currency = currency
     if (benefits !== undefined) updateData.benefits = benefits
     if (isActive !== undefined) updateData.isActive = isActive
+    if (durationDays !== undefined) {
+      const validDurations = [30, 90, 365]
+      if (!validDurations.includes(durationDays)) {
+        res.status(400).json({ error: 'Duración inválida. Debe ser 30, 90 o 365 días' })
+        return
+      }
+      updateData.durationDays = durationDays
+    }
 
     const tier = await prisma.subscriptionTier.update({
       where: { id: tierId },
@@ -338,7 +355,8 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
     // ==========================================
 
     // POR AHORA: Aprobación automática para desarrollo/testing
-    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 días desde ahora
+    // Calcular endDate basado en durationDays del tier
+    const endDate = new Date(Date.now() + tier.durationDays * 24 * 60 * 60 * 1000)
     
     const subscription = await prisma.subscription.create({
       data: {

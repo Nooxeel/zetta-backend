@@ -120,6 +120,7 @@ model SubscriptionTier {
   description   String?
   price         Float
   currency      String         @default("USD")
+  durationDays  Int            @default(30)
   benefits      String
   isActive      Boolean        @default(true)
   order         Int            @default(0)
