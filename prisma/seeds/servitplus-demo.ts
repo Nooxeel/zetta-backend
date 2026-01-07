@@ -27,15 +27,15 @@ async function main() {
         username: 'servitplus',
         displayName: 'SERVITPLUS',
         email: 'contacto@servitplus.cl',
-        role: 'CREATOR',
+        isCreator: true,
       }
     })
 
     // Update or create creator profile
     await prisma.creator.upsert({
-      where: { id: updatedUser.id },
+      where: { userId: updatedUser.id },
       create: {
-        id: updatedUser.id,
+        userId: updatedUser.id,
         bio: `🔧 GASFITERÍA INTEGRAL - SERVICIO TÉCNICO
 
 ✅ Técnico Certificado SEC
@@ -94,29 +94,34 @@ Ursus Trotter • Splendid • Mademsa • Neckar • Junkers
     })
 
     // Delete existing social links
-    await prisma.socialLink.deleteMany({
-      where: { creatorId: updatedUser.id }
+    const existingCreator = await prisma.creator.findUnique({
+      where: { userId: updatedUser.id }
     })
 
-    // Create social links with contact info
-    await prisma.socialLink.createMany({
-      data: [
-        {
-          creatorId: updatedUser.id,
-          platform: 'phone',
-          url: '+56995077828',
-          label: 'WhatsApp / Teléfono',
-          order: 0
-        },
-        {
-          creatorId: updatedUser.id,
-          platform: 'whatsapp',
-          url: 'https://wa.me/56995077828',
-          label: 'Contactar por WhatsApp',
-          order: 1
-        },
-        {
-          creatorId: updatedUser.id,
+    if (existingCreator) {
+      await prisma.socialLink.deleteMany({
+        where: { creatorId: existingCreator.id }
+      })
+
+      // Create social links with contact info
+      await prisma.socialLink.createMany({
+        data: [
+          {
+            creatorId: existingCreator.id,
+            platform: 'phone',
+            url: '+56995077828',
+            label: 'WhatsApp / Teléfono',
+            order: 0
+          },
+          {
+            creatorId: existingCreator.id,
+            platform: 'whatsapp',
+            url: 'https://wa.me/56995077828',
+            label: 'Contactar por WhatsApp',
+            order: 1
+          },
+          {
+            creatorId: existingCreator.id,
           platform: 'email',
           url: 'mailto:contacto@servitplus.cl',
           label: 'Email',
@@ -124,6 +129,7 @@ Ursus Trotter • Splendid • Mademsa • Neckar • Junkers
         }
       ]
     })
+    }
 
     console.log('✅ User updated successfully')
     console.log('📧 Email: contacto@servitplus.cl')
@@ -140,12 +146,16 @@ Ursus Trotter • Splendid • Mademsa • Neckar • Junkers
       username: 'servitplus',
       displayName: 'SERVITPLUS',
       email: 'contacto@servitplus.cl',
-      passwordHash: hashedPassword,
-      role: 'CREATOR',
-      emailVerified: true,
-      creatorProfile: {
-        create: {
-          bio: `🔧 GASFITERÍA INTEGRAL - SERVICIO TÉCNICO
+      password: hashedPassword,
+      isCreator: true,
+    }
+  })
+
+  // Create creator profile
+  const creator = await prisma.creator.create({
+    data: {
+      userId: user.id,
+      bio: `🔧 GASFITERÍA INTEGRAL - SERVICIO TÉCNICO
 
 ✅ Técnico Certificado SEC
 👨‍🔧 Juan Carlos Pulido
@@ -167,16 +177,9 @@ Ursus Trotter • Splendid • Mademsa • Neckar • Junkers
 
 📞 ¡LLAMA AHORA!
 +56 9 9507 7828`,
-          backgroundColor: '#1a2744',
-          backgroundGradient: 'from-[#1a2744] to-[#0d1520]',
-          accentColor: '#3b82f6',
-          profileImage: null,
-          coverImage: null,
-        }
-      }
-    },
-    include: {
-      creatorProfile: true
+      backgroundColor: '#1a2744',
+      backgroundGradient: 'from-[#1a2744] to-[#0d1520]',
+      accentColor: '#3b82f6',
     }
   })
 
@@ -184,21 +187,21 @@ Ursus Trotter • Splendid • Mademsa • Neckar • Junkers
   await prisma.socialLink.createMany({
     data: [
       {
-        creatorId: user.id,
+        creatorId: creator.id,
         platform: 'phone',
         url: '+56995077828',
         label: 'WhatsApp / Teléfono',
         order: 0
       },
       {
-        creatorId: user.id,
+        creatorId: creator.id,
         platform: 'whatsapp',
         url: 'https://wa.me/56995077828',
         label: 'Contactar por WhatsApp',
         order: 1
       },
       {
-        creatorId: user.id,
+        creatorId: creator.id,
         platform: 'email',
         url: 'mailto:contacto@servitplus.cl',
         label: 'Email',
