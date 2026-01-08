@@ -317,16 +317,17 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
       return
     }
 
-    // Verificar que no esté ya suscrito
-    const existingSubscription = await prisma.subscription.findFirst({
+    // Verificar que no esté ya suscrito activo
+    const existingSubscription = await prisma.subscription.findUnique({
       where: {
-        userId,
-        creatorId,
-        status: 'active'
+        userId_creatorId: {
+          userId,
+          creatorId
+        }
       }
     })
 
-    if (existingSubscription) {
+    if (existingSubscription && existingSubscription.status === 'active') {
       res.status(400).json({ error: 'Ya estás suscrito a este creador' })
       return
     }
@@ -358,8 +359,22 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
     // Calcular endDate basado en durationDays del tier
     const endDate = new Date(Date.now() + tier.durationDays * 24 * 60 * 60 * 1000)
     
-    const subscription = await prisma.subscription.create({
-      data: {
+    // Usar upsert para actualizar si existe o crear si no existe
+    const subscription = await prisma.subscription.upsert({
+      where: {
+        userId_creatorId: {
+          userId,
+          creatorId
+        }
+      },
+      update: {
+        tierId,
+        status: 'active',
+        startDate: new Date(),
+        endDate,
+        autoRenew: true
+      },
+      create: {
         userId,
         creatorId,
         tierId,
