@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
+import { sanitizeComment } from '../lib/sanitize';
 
 const router = Router();
 
@@ -174,6 +175,9 @@ router.post('/:creatorId', authenticate, async (req: Request, res: Response): Pr
       return;
     }
     
+    // Sanitizar comentario para prevenir XSS
+    const sanitizedContent = sanitizeComment(content);
+    
     // Verificar que el creador existe
     const creator = await prisma.creator.findUnique({
       where: { id: creatorId }
@@ -191,7 +195,7 @@ router.post('/:creatorId', authenticate, async (req: Request, res: Response): Pr
       data: {
         userId,
         creatorId,
-        content: content.trim(),
+        content: sanitizedContent,
         isApproved: isOwnProfile // Auto-aprobar si es el mismo creador
       },
       include: {

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma'
+import { sanitizeCreatorProfile } from '../lib/sanitize'
 
 const router = Router()
 
@@ -270,8 +271,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
     const userAgent = req.headers['user-agent'] || 'unknown'
 
-    // Fields to track for audit
-    const fieldsToTrack = {
+    // Sanitizar datos del perfil para prevenir XSS
+    const sanitizedBody = sanitizeCreatorProfile({
       bio,
       bioTitle,
       backgroundColor,
@@ -280,7 +281,21 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       accentColor,
       textColor,
       fontFamily,
-      coverImage
+      coverImage,
+      visibilitySettings
+    })
+
+    // Fields to track for audit
+    const fieldsToTrack = {
+      bio: sanitizedBody.bio,
+      bioTitle: sanitizedBody.bioTitle,
+      backgroundColor: sanitizedBody.backgroundColor,
+      backgroundGradient: sanitizedBody.backgroundGradient,
+      backgroundImage: sanitizedBody.backgroundImage,
+      accentColor: sanitizedBody.accentColor,
+      textColor: sanitizedBody.textColor,
+      fontFamily: sanitizedBody.fontFamily,
+      coverImage: sanitizedBody.coverImage
     }
 
     // Create audit logs for changed fields
@@ -304,20 +319,20 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
 
     // Update profile and create audit logs in transaction
     const updateData: any = {
-      bio,
-      bioTitle,
-      backgroundColor,
-      backgroundGradient,
-      backgroundImage,
-      accentColor,
-      textColor,
-      fontFamily,
-      visibilitySettings
+      bio: sanitizedBody.bio,
+      bioTitle: sanitizedBody.bioTitle,
+      backgroundColor: sanitizedBody.backgroundColor,
+      backgroundGradient: sanitizedBody.backgroundGradient,
+      backgroundImage: sanitizedBody.backgroundImage,
+      accentColor: sanitizedBody.accentColor,
+      textColor: sanitizedBody.textColor,
+      fontFamily: sanitizedBody.fontFamily,
+      visibilitySettings: sanitizedBody.visibilitySettings
     }
 
     // Add coverImage if provided
-    if (coverImage) {
-      updateData.coverImage = coverImage
+    if (sanitizedBody.coverImage) {
+      updateData.coverImage = sanitizedBody.coverImage
     }
 
     const [updated] = await prisma.$transaction([

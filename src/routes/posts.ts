@@ -5,6 +5,7 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
+import { sanitizePost, sanitizeComment } from '../lib/sanitize'
 import { io } from '../index'
 
 const router = Router()
@@ -272,13 +273,16 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Content is required and must be an array' })
     }
 
+    // Sanitizar contenido para prevenir XSS
+    const sanitized = sanitizePost({ title, description, content })
+
     // Crear post
     const post = await prisma.post.create({
       data: {
         creatorId: creator.id,
-        title: title || null,
-        description: description || null,
-        content: JSON.stringify(content),
+        title: sanitized.title,
+        description: sanitized.description,
+        content: JSON.stringify(sanitized.content),
         visibility: visibility || 'public',
         price: price ? parseFloat(price) : null,
         requiredTierId: requiredTierId || null
@@ -373,17 +377,30 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Not authorized to edit this post' })
     }
 
+    // Preparar datos sanitizados para actualizar
+    const updates: any = {}
+    
+    if (title !== undefined) updates.title = title
+    if (description !== undefined) updates.description = description
+    if (visibility !== undefined) updates.visibility = visibility
+    if (price !== undefined) updates.price = parseFloat(price)
+    if (requiredTierId !== undefined) updates.requiredTierId = requiredTierId
+    
+    // Si se proporciona contenido, sanitizarlo
+    if (content) {
+      if (!Array.isArray(content)) {
+        return res.status(400).json({ error: 'Content must be an array' })
+      }
+      const sanitized = sanitizePost({ title, description, content })
+      updates.title = sanitized.title
+      updates.description = sanitized.description
+      updates.content = JSON.stringify(sanitized.content)
+    }
+
     // Actualizar post
     const updated = await prisma.post.update({
       where: { id },
-      data: {
-        title: title !== undefined ? title : post.title,
-        description: description !== undefined ? description : post.description,
-        content: content ? JSON.stringify(content) : post.content,
-        visibility: visibility || post.visibility,
-        price: price !== undefined ? parseFloat(price) : post.price,
-        requiredTierId: requiredTierId !== undefined ? requiredTierId : post.requiredTierId
-      },
+      data: updates,
       include: {
         creator: {
           include: {
