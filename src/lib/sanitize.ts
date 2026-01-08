@@ -1,8 +1,39 @@
 /**
- * Sanitización XSS para contenido de usuario
+ * Sanitización XSS para contenido de usuario (Backend - Node.js)
+ * Implementación nativa sin dependencias externas para mejor compatibilidad
  */
 
-import DOMPurify from 'isomorphic-dompurify'
+/**
+ * Escapa caracteres HTML peligrosos
+ */
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;',
+  }
+  return text.replace(/[&<>"'/]/g, (char) => map[char])
+}
+
+/**
+ * Remueve todos los tags HTML excepto los permitidos
+ */
+function stripHtml(html: string, allowedTags: string[] = []): string {
+  if (!html) return ''
+  
+  // Si no hay tags permitidos, remover todos
+  if (allowedTags.length === 0) {
+    return html.replace(/<[^>]*>/g, '')
+  }
+  
+  // Permitir solo tags específicos (formato simple)
+  const allowedPattern = allowedTags.map(tag => `</?${tag}>`).join('|')
+  const regex = new RegExp(`<(?!(?:${allowedTags.join('|')})[> /])([^>]+)>`, 'gi')
+  return html.replace(regex, '')
+}
 
 /**
  * Sanitiza un string HTML/texto para prevenir ataques XSS
@@ -10,11 +41,18 @@ import DOMPurify from 'isomorphic-dompurify'
 export function sanitizeHtml(dirty: string): string {
   if (!dirty || typeof dirty !== 'string') return ''
   
-  return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
-    ALLOWED_ATTR: ['href', 'target'],
-    ALLOW_DATA_ATTR: false
-  })
+  // Remover scripts y tags peligrosos
+  let clean = dirty
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+  
+  // Permitir solo tags seguros básicos
+  const allowedTags = ['b', 'i', 'em', 'strong', 'br', 'p']
+  clean = stripHtml(clean, allowedTags)
+  
+  return clean
 }
 
 /**
@@ -23,10 +61,12 @@ export function sanitizeHtml(dirty: string): string {
 export function sanitizeText(dirty: string): string {
   if (!dirty || typeof dirty !== 'string') return ''
   
-  return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: []
-  })
+  // Remover todos los tags HTML
+  return dirty
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/javascript:/gi, '')
+    .trim()
 }
 
 /**
@@ -104,10 +144,7 @@ export function sanitizeComment(content: string): string {
   }
 
   // Permitir formato básico pero no scripts
-  const sanitized = DOMPurify.sanitize(content, {
-    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'br'],
-    ALLOWED_ATTR: []
-  })
+  const sanitized = sanitizeHtml(content)
 
   // Limitar longitud
   return sanitized.substring(0, 2000)
@@ -125,10 +162,7 @@ export function sanitizeCreatorProfile(profile: {
 
   if (profile.bio) {
     // Permitir formato básico en bio
-    sanitized.bio = DOMPurify.sanitize(profile.bio, {
-      ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'br', 'p'],
-      ALLOWED_ATTR: []
-    }).substring(0, 5000)
+    sanitized.bio = sanitizeHtml(profile.bio).substring(0, 5000)
   }
 
   if (profile.bioTitle) {
