@@ -41,7 +41,7 @@ app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = [
       'http://localhost:3000',
-      'https://apapacho-lilac.vercel.app',
+      'https://appapacho.vercel.app',
       FRONTEND_URL
     ]
     // Allow all Vercel preview deployments
@@ -101,7 +101,7 @@ const io = new SocketIOServer(httpServer, {
       // SECURITY: Only allow specific domains, not all .vercel.app domains
       const allowedOrigins = [
         'http://localhost:3000',
-        'https://apapacho-lilac.vercel.app',
+        'https://appapacho.vercel.app',
         FRONTEND_URL
       ].filter(Boolean) // Remove undefined/null values
 
