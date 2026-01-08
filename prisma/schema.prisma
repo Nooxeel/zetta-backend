@@ -62,7 +62,7 @@ model Creator {
   status             CreatorStatus        @default(ACTIVE)
   tier               CreatorTier          @default(STANDARD)
   // Configuración de visibilidad de secciones (JSON)
-  visibilitySettings Json                 @default("{\"tabs\":{\"likes\":true,\"posts\":true,\"photos\":true,\"videos\":true,\"audio\":true,\"guestbook\":true},\"messaging\":\"logged_in\"}")
+  visibilitySettings Json                 @default("{\"tabs\":{\"likes\":true,\"posts\":true,\"photos\":true,\"videos\":true,\"audio\":true,\"guestbook\":true},\"messaging\":\"logged_in\",\"tipping\":true}")
   tierEffectiveFrom  DateTime             @default(now())
   comments           Comment[]
   user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
