@@ -287,14 +287,21 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
       })
     ])
 
+    console.log('[Messages] Message created:', message.id)
+    console.log('[Messages] Emitting to conversation:', conversationId)
+    console.log('[Messages] Recipient ID:', isParticipant1 ? conversation.participant2Id : conversation.participant1Id)
+
     // Emit WebSocket event to conversation room
     io.to(`conversation:${conversationId}`).emit('message:new', message)
 
     // Emit unread count update to the recipient
     const recipientId = isParticipant1 ? conversation.participant2Id : conversation.participant1Id
+    const newUnreadCount = isParticipant1 ? conversation.participant2Unread + 1 : conversation.participant1Unread + 1
+    
+    console.log('[Messages] Emitting unread:update to user:', recipientId, 'count:', newUnreadCount)
     io.to(`user:${recipientId}`).emit('unread:update', {
       conversationId,
-      unreadCount: isParticipant1 ? conversation.participant2Unread + 1 : conversation.participant1Unread + 1
+      unreadCount: newUnreadCount
     })
 
     res.status(201).json(message)

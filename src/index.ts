@@ -138,19 +138,21 @@ io.on('connection', (socket) => {
   // Join user-specific room
   socket.on('join:user', (userId: string) => {
     socket.join(`user:${userId}`)
-    console.log(`User ${userId} joined their room`)
+    console.log(`👤 User ${userId} joined their room (socket: ${socket.id})`)
+    console.log(`   Rooms for this socket:`, Array.from(socket.rooms))
   })
 
   // Join conversation room
   socket.on('join:conversation', (conversationId: string) => {
     socket.join(`conversation:${conversationId}`)
-    console.log(`Socket ${socket.id} joined conversation ${conversationId}`)
+    console.log(`💬 Socket ${socket.id} joined conversation ${conversationId}`)
+    console.log(`   Rooms for this socket:`, Array.from(socket.rooms))
   })
 
   // Leave conversation room
   socket.on('leave:conversation', (conversationId: string) => {
     socket.leave(`conversation:${conversationId}`)
-    console.log(`Socket ${socket.id} left conversation ${conversationId}`)
+    console.log(`👋 Socket ${socket.id} left conversation ${conversationId}`)
   })
 
   socket.on('disconnect', () => {
