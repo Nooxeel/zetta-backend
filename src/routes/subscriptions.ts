@@ -260,7 +260,13 @@ router.get('/check/:creatorId', authenticate, async (req: Request, res: Response
       where: {
         userId,
         creatorId,
-        status: 'active'
+        OR: [
+          { status: 'active' },
+          {
+            status: 'cancelled',
+            endDate: { gte: new Date() } // Aún no ha expirado
+          }
+        ]
       },
       include: {
         tier: true
