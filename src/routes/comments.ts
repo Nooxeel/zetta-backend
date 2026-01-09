@@ -2,10 +2,16 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { sanitizeComment } from '../lib/sanitize';
+import { commentLimiter } from '../middleware/rateLimiter';
+import { createCommentSchema, validateData } from '../lib/validators';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set.');
+}
 
 // Middleware to verify JWT
 const authenticate = async (req: Request, res: Response, next: Function) => {
@@ -159,21 +165,19 @@ router.get('/:creatorId/stats', async (req: Request, res: Response): Promise<voi
 });
 
 // POST /api/comments/:creatorId - Crear un comentario (requiere autenticación)
-router.post('/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
+router.post('/:creatorId', commentLimiter, authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const { creatorId } = req.params;
-    const { content } = req.body;
     const userId = (req as any).user.userId;
     
-    if (!content || content.trim().length === 0) {
-      res.status(400).json({ error: 'El comentario no puede estar vacío' });
+    // Validar con Zod
+    const validation = validateData(createCommentSchema, req.body);
+    if (!validation.success) {
+      res.status(400).json({ error: validation.errors[0] });
       return;
     }
     
-    if (content.length > 500) {
-      res.status(400).json({ error: 'El comentario no puede exceder 500 caracteres' });
-      return;
-    }
+    const { content } = validation.data;
     
     // Sanitizar comentario para prevenir XSS
     const sanitizedContent = sanitizeComment(content);

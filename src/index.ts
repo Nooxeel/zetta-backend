@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import path from 'path'
 import dotenv from 'dotenv'
 import { createServer } from 'http'
@@ -53,8 +54,15 @@ app.use(cors({
   },
   credentials: true
 }))
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+
+// Security headers with helmet
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow static files from other origins
+  contentSecurityPolicy: false // Let frontend handle CSP
+}))
+
+app.use(express.json({ limit: '10mb' })) // Limit request body size
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 // Serve static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))

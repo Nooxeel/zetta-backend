@@ -6,6 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
 import { sanitizePost, sanitizeComment } from '../lib/sanitize'
+import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter } from '../middleware/rateLimiter'
 import { io } from '../index'
 
 const router = Router()
@@ -252,7 +253,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 })
 
 // POST /api/posts - Crear nuevo post
-router.post('/', authenticate, async (req: Request, res: Response) => {
+router.post('/', createPostLimiter, authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
     const { title, description, content, visibility, price, requiredTierId } = req.body
@@ -313,7 +314,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 })
 
 // POST /api/posts/upload-video - Subir video
-router.post('/upload-video', authenticate, uploadVideo.single('video'), async (req: Request, res: Response) => {
+router.post('/upload-video', uploadLimiter, authenticate, uploadVideo.single('video'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No video file provided' })
@@ -334,7 +335,7 @@ router.post('/upload-video', authenticate, uploadVideo.single('video'), async (r
 })
 
 // POST /api/posts/upload-image - Subir imagen
-router.post('/upload-image', authenticate, uploadImage.single('image'), async (req: Request, res: Response) => {
+router.post('/upload-image', uploadLimiter, authenticate, uploadImage.single('image'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' })
@@ -474,7 +475,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
 // ==================== POST LIKES ====================
 
 // POST /api/posts/:id/like - Toggle like on a post
-router.post('/:id/like', authenticate, async (req: Request, res: Response) => {
+router.post('/:id/like', likeLimiter, authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
     const { id: postId } = req.params
@@ -685,7 +686,7 @@ router.get('/:id/comments', async (req: Request, res: Response) => {
 })
 
 // POST /api/posts/:id/comments - Create a comment
-router.post('/:id/comments', authenticate, async (req: Request, res: Response) => {
+router.post('/:id/comments', commentLimiter, authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
     const { id: postId } = req.params

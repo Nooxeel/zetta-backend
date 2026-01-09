@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import rateLimit from 'express-rate-limit'
 import prisma from '../lib/prisma'
+import { registerSchema, loginSchema, validateData } from '../lib/validators'
+import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
 
 const router = Router()
 
@@ -12,33 +13,19 @@ if (!JWT_SECRET) {
   throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
 }
 
-// Rate limiting for authentication endpoints (prevent brute force attacks)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
-  message: 'Too many authentication attempts from this IP, please try again after 15 minutes',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-})
-
-// More generous limit for registration (one-time action)
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // Limit each IP to 3 registration attempts per hour
-  message: 'Too many accounts created from this IP, please try again after an hour',
-  standardHeaders: true,
-  legacyHeaders: false,
-})
-
 // Register new user
 router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, username, password, displayName, isCreator } = req.body
-
-    // Validate input
-    if (!email || !username || !password || !displayName) {
-      return res.status(400).json({ error: 'All fields are required' })
+    // Validar input con Zod
+    const validation = validateData(registerSchema, req.body)
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: validation.errors 
+      })
     }
+    
+    const { email, username, password, displayName, isCreator } = validation.data
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -101,11 +88,16 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
 // Login
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' })
+    // Validar input con Zod
+    const validation = validateData(loginSchema, req.body)
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: validation.errors 
+      })
     }
+    
+    const { email, password } = validation.data
 
     // Find user
     const user = await prisma.user.findUnique({

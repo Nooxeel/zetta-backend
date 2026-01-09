@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
+import { messageLimiter } from '../middleware/rateLimiter'
 import { io } from '../index'
 
 const router = Router()
@@ -227,7 +228,7 @@ router.get('/conversations/:conversationId/messages', authenticate, async (req: 
 })
 
 // Send a message
-router.post('/conversations/:conversationId/messages', authenticate, async (req: Request, res: Response) => {
+router.post('/conversations/:conversationId/messages', messageLimiter, authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
     const { conversationId } = req.params
