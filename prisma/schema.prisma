@@ -46,6 +46,8 @@ model Creator {
   userId             String               @unique
   bio                String?
   bioTitle           String               @default("Acerca de mí")
+  extendedInfo       String?              // Información extendida/servicios (texto largo)
+  extendedInfoTitle  String               @default("Información Adicional")
   profileImage       String?
   coverImage         String?
   backgroundColor    String               @default("#0f0f14")

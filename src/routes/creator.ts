@@ -248,6 +248,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     const {
       bio,
       bioTitle,
+      extendedInfo,
+      extendedInfoTitle,
       backgroundColor,
       backgroundGradient,
       backgroundImage,
@@ -275,6 +277,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     const sanitizedBody = sanitizeCreatorProfile({
       bio,
       bioTitle,
+      extendedInfo,
+      extendedInfoTitle,
       backgroundColor,
       backgroundGradient,
       backgroundImage,
@@ -289,6 +293,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     const fieldsToTrack = {
       bio: sanitizedBody.bio,
       bioTitle: sanitizedBody.bioTitle,
+      extendedInfo: sanitizedBody.extendedInfo,
+      extendedInfoTitle: sanitizedBody.extendedInfoTitle,
       backgroundColor: sanitizedBody.backgroundColor,
       backgroundGradient: sanitizedBody.backgroundGradient,
       backgroundImage: sanitizedBody.backgroundImage,
@@ -321,6 +327,8 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
     const updateData: any = {
       bio: sanitizedBody.bio,
       bioTitle: sanitizedBody.bioTitle,
+      extendedInfo: sanitizedBody.extendedInfo,
+      extendedInfoTitle: sanitizedBody.extendedInfoTitle,
       backgroundColor: sanitizedBody.backgroundColor,
       backgroundGradient: sanitizedBody.backgroundGradient,
       backgroundImage: sanitizedBody.backgroundImage,

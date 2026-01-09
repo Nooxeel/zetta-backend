@@ -156,6 +156,8 @@ export function sanitizeComment(content: string): string {
 export function sanitizeCreatorProfile(profile: {
   bio?: string
   bioTitle?: string
+  extendedInfo?: string
+  extendedInfoTitle?: string
   [key: string]: any
 }): any {
   const sanitized: any = { ...profile }
@@ -167,6 +169,15 @@ export function sanitizeCreatorProfile(profile: {
 
   if (profile.bioTitle) {
     sanitized.bioTitle = sanitizeText(profile.bioTitle).substring(0, 100)
+  }
+
+  if (profile.extendedInfo) {
+    // Permitir formato básico en información extendida
+    sanitized.extendedInfo = sanitizeHtml(profile.extendedInfo).substring(0, 5000)
+  }
+
+  if (profile.extendedInfoTitle) {
+    sanitized.extendedInfoTitle = sanitizeText(profile.extendedInfoTitle).substring(0, 100)
   }
 
   return sanitized
