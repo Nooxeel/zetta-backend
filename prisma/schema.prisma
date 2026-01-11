@@ -39,6 +39,8 @@ model User {
   postComments       PostComment[]
   // User interests
   interests          UserInterest[]
+  // Points system
+  userPoints         UserPoints?
 }
 
 model Creator {
@@ -632,4 +634,50 @@ enum InterestCategory {
   AESTHETIC
   THEMES
   NICHE
+}
+
+// Roulette/Points System
+model UserPoints {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  points            Int      @default(1) // Users start with 1 point
+  totalEarned       Int      @default(1)
+  totalSpent        Int      @default(0)
+  lastLoginDate     DateTime @default(now())
+  loginStreak       Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history           PointsHistory[]
+  rouletteSpins     RouletteSpin[]
+
+  @@index([userId])
+}
+
+model PointsHistory {
+  id          String   @id @default(uuid())
+  userPointsId String
+  amount      Int      // Positive for earned, negative for spent
+  reason      String   // 'daily_login', 'roulette_win', 'roulette_spin', etc.
+  createdAt   DateTime @default(now())
+
+  userPoints  UserPoints @relation(fields: [userPointsId], references: [id], onDelete: Cascade)
+
+  @@index([userPointsId])
+  @@index([createdAt])
+}
+
+model RouletteSpin {
+  id          String   @id @default(uuid())
+  userPointsId String
+  prizeId     Int      // 1-7, corresponds to prize configuration
+  prizeLabel  String   // E.g., "10 Puntos", "Jackpot! 50 Puntos"
+  pointsWon   Int      // Points won from this spin
+  createdAt   DateTime @default(now())
+
+  userPoints  UserPoints @relation(fields: [userPointsId], references: [id], onDelete: Cascade)
+
+  @@index([userPointsId])
+  @@index([createdAt])
 }

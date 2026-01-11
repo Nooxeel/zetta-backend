@@ -26,6 +26,7 @@ import interestsRoutes from './routes/interests'
 import discoverRoutes from './routes/discover'
 import socialLinksRoutes from './routes/socialLinks'
 import subscriptionsRoutes from './routes/subscriptions'
+import rouletteRoutes from './routes/roulette'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -84,6 +85,7 @@ app.use('/api/interests', interestsRoutes)
 app.use('/api/discover', discoverRoutes)
 app.use('/api/sociallinks', socialLinksRoutes)
 app.use('/api/subscriptions', subscriptionsRoutes)
+app.use('/api/roulette', rouletteRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
