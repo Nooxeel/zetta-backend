@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Backend Dev",
+			"type": "shell",
+			"command": "cd /Users/zippy/Desktop/apapacho-backend && npm run dev",
+			"isBackground": true
+		}
+	]
+}

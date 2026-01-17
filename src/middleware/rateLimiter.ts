@@ -5,6 +5,11 @@
 import rateLimit from 'express-rate-limit'
 import { Request } from 'express'
 
+// Opciones comunes para desactivar validaciones problemáticas
+const commonOptions = {
+  validate: false as const
+}
+
 /**
  * Genera una clave única combinando userId (si autenticado) con IP
  * Esto previene que usuarios autenticados sean afectados por otros usuarios
@@ -30,6 +35,7 @@ const createKeyGenerator = (prefix: string = '') => {
  * Nota: Aquí solo usamos IP porque el usuario aún no está autenticado
  */
 export const authLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 5, // 5 intentos por ventana
   message: { 
@@ -49,6 +55,7 @@ export const authLimiter = rateLimit({
  * Más restrictivo, 1 hora de ventana
  */
 export const registerLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 3, // 3 cuentas por hora por IP
   message: { 
@@ -64,6 +71,7 @@ export const registerLimiter = rateLimit({
  * Moderado para prevenir spam
  */
 export const createPostLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 30, // 30 posts por hora
   message: { 
@@ -80,6 +88,7 @@ export const createPostLimiter = rateLimit({
  * Previene spam de comentarios
  */
 export const commentLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 20, // 20 comentarios por 15 min
   message: { 
@@ -96,6 +105,7 @@ export const commentLimiter = rateLimit({
  * Muy restrictivo por el costo de almacenamiento
  */
 export const uploadLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 50, // 50 uploads por hora
   message: { 
@@ -112,6 +122,7 @@ export const uploadLimiter = rateLimit({
  * Previene spam en chat
  */
 export const messageLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 60 * 1000, // 1 minuto
   max: 30, // 30 mensajes por minuto
   message: { 
@@ -128,6 +139,7 @@ export const messageLimiter = rateLimit({
  * Límite global por IP
  */
 export const apiLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 300, // 300 requests por 15 min
   message: { 
@@ -147,6 +159,7 @@ export const apiLimiter = rateLimit({
  * Generoso pero protegido
  */
 export const webhookLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 60 * 1000, // 1 minuto
   max: 100, // 100 webhooks por minuto
   message: { 
@@ -162,6 +175,7 @@ export const webhookLimiter = rateLimit({
  * Previene spam de likes
  */
 export const likeLimiter = rateLimit({
+  ...commonOptions,
   windowMs: 60 * 1000, // 1 minuto
   max: 60, // 60 likes por minuto
   message: { 

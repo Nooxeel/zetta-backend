@@ -21,6 +21,11 @@ model User {
   accentColor        String         @default("#d946ef")
   fontFamily         String         @default("Inter")
   isCreator          Boolean        @default(false)
+  // Age verification fields
+  birthdate          DateTime?
+  ageVerified        Boolean        @default(false)
+  ageVerifiedAt      DateTime?
+  ageVerificationIp  String?        // IP used for verification (for audit)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   comments           Comment[]
@@ -43,6 +48,10 @@ model User {
   userPoints         UserPoints?
   // Block system - users who blocked this user
   blockedBy          BlockedUser[] @relation("BlockedUser")
+  // Referral system
+  referralCode       String?       @unique // Unique code for this user to share
+  referredBy         Referral?     @relation("ReferredUser")
+  referrals          Referral[]    @relation("ReferrerUser")
 }
 
 model Creator {
@@ -69,6 +78,8 @@ model Creator {
   tier               CreatorTier          @default(STANDARD)
   // Configuración de visibilidad de secciones (JSON)
   visibilitySettings Json                 @default("{\"tabs\":{\"likes\":true,\"posts\":true,\"photos\":true,\"videos\":true,\"audio\":true,\"guestbook\":true,\"tipping\":true,\"postTipping\":true},\"messaging\":\"logged_in\"}")
+  // Configuración de watermark (JSON)
+  watermarkSettings  Json                 @default("{\"enabled\":false,\"text\":\"\",\"position\":\"bottom-right\",\"opacity\":0.7,\"size\":\"medium\"}")
   tierEffectiveFrom  DateTime             @default(now())
   comments           Comment[]
   user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -90,6 +101,12 @@ model Creator {
   interests          CreatorInterest[]
   // Block system
   blockedUsers       BlockedUser[]
+  // Promocodes
+  promocodes         Promocode[]
+  // Broadcasts / Mass DMs
+  broadcasts         Broadcast[]
+  // Platform imports
+  platformImports    PlatformImport[]
 }
 
 model MusicTrack {
@@ -710,4 +727,226 @@ model BlockedUser {
   @@unique([creatorId, blockedUserId])
   @@index([creatorId])
   @@index([blockedUserId])
+}
+
+// ==================== PROMOCODES SYSTEM ====================
+
+model Promocode {
+  id              String              @id @default(uuid())
+  creatorId       String
+  code            String              // Código (ej: WELCOME50)
+  type            PromocodeType       // PERCENTAGE, FIXED_AMOUNT, FREE_TRIAL
+  value           Float               // % descuento, monto fijo, o días de trial
+  currency        String?             @default("CLP")
+  maxUses         Int?                // null = ilimitado
+  currentUses     Int                 @default(0)
+  maxUsesPerUser  Int                 @default(1) // Máx usos por usuario
+  minPurchase     Float?              // Mínimo de compra para aplicar
+  applicableTiers String[]            // IDs de tiers donde aplica (vacío = todos)
+  startsAt        DateTime            @default(now())
+  expiresAt       DateTime?           // null = no expira
+  isActive        Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  creator         Creator             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  redemptions     PromocodeRedemption[]
+
+  @@unique([creatorId, code])
+  @@index([code])
+  @@index([creatorId, isActive])
+  @@index([expiresAt])
+}
+
+model PromocodeRedemption {
+  id              String      @id @default(uuid())
+  promocodeId     String
+  userId          String
+  subscriptionId  String?     // Suscripción donde se aplicó
+  originalAmount  Float       // Monto original
+  discountAmount  Float       // Monto descontado
+  finalAmount     Float       // Monto final pagado
+  createdAt       DateTime    @default(now())
+
+  promocode       Promocode   @relation(fields: [promocodeId], references: [id], onDelete: Cascade)
+
+  @@index([promocodeId])
+  @@index([userId])
+  @@index([userId, promocodeId])
+}
+
+enum PromocodeType {
+  PERCENTAGE      // Ej: 20% de descuento
+  FIXED_AMOUNT    // Ej: $5000 de descuento
+  FREE_TRIAL      // Ej: 7 días gratis
+}
+
+// ==================== MASS DM / BROADCAST SYSTEM ====================
+
+model Broadcast {
+  id              String              @id @default(uuid())
+  creatorId       String
+  content         String              // Mensaje de texto
+  mediaUrl        String?             // URL de imagen/video opcional
+  mediaType       String?             // 'image' | 'video'
+  // Targeting
+  targetType      BroadcastTarget     @default(ALL_SUBSCRIBERS)
+  targetTierIds   String[]            // Para SPECIFIC_TIERS: IDs de tiers específicos
+  // Status tracking
+  status          BroadcastStatus     @default(PENDING)
+  totalRecipients Int                 @default(0)
+  sentCount       Int                 @default(0)
+  failedCount     Int                 @default(0)
+  // Scheduling
+  scheduledFor    DateTime?           // null = enviar inmediatamente
+  sentAt          DateTime?
+  completedAt     DateTime?
+  // Timestamps
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  creator         Creator             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  recipients      BroadcastRecipient[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([createdAt])
+}
+
+model BroadcastRecipient {
+  id              String              @id @default(uuid())
+  broadcastId     String
+  userId          String
+  conversationId  String?             // Conversation donde se envió
+  messageId       String?             // Message creado
+  status          BroadcastRecipientStatus @default(PENDING)
+  sentAt          DateTime?
+  error           String?
+  createdAt       DateTime            @default(now())
+
+  broadcast       Broadcast           @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, userId])
+  @@index([broadcastId])
+  @@index([userId])
+  @@index([status])
+}
+
+enum BroadcastTarget {
+  ALL_SUBSCRIBERS     // Todos los suscriptores activos
+  SPECIFIC_TIERS      // Solo suscriptores de tiers específicos
+  NEW_SUBSCRIBERS     // Suscriptores en últimos 7 días
+  EXPIRING_SOON       // Suscripciones por vencer (próximos 7 días)
+}
+
+enum BroadcastStatus {
+  PENDING             // Creado, esperando envío
+  SCHEDULED           // Programado para envío futuro
+  PROCESSING          // En proceso de envío
+  COMPLETED           // Enviado a todos
+  FAILED              // Error en el proceso
+  CANCELLED           // Cancelado por el creador
+}
+
+enum BroadcastRecipientStatus {
+  PENDING             // Pendiente de enviar
+  SENT                // Mensaje enviado
+  FAILED              // Error al enviar
+}
+
+// =====================================
+// REFERRAL PROGRAM MODELS
+// =====================================
+
+model Referral {
+  id                String        @id @default(uuid())
+  referrerId        String        // User who referred
+  referredId        String        @unique // User who was referred (unique - can only be referred once)
+  code              String        // Referral code used
+  // Commission tracking
+  commissionRate    Float         @default(0.05) // 5% default
+  commissionEndDate DateTime      // When commission period ends (e.g., 3 months from signup)
+  totalEarned       Float         @default(0)    // Total commission earned
+  // Status
+  status            ReferralStatus @default(PENDING)
+  convertedAt       DateTime?     // When referred user made first purchase
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  referrer          User          @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred          User          @relation("ReferredUser", fields: [referredId], references: [id], onDelete: Cascade)
+  commissions       ReferralCommission[]
+
+  @@index([referrerId])
+  @@index([referredId])
+  @@index([code])
+  @@index([status])
+}
+
+model ReferralCommission {
+  id            String   @id @default(uuid())
+  referralId    String
+  amount        Float    // Commission amount
+  sourceType    String   // 'subscription' | 'donation' | 'product'
+  sourceId      String?  // ID of the source transaction
+  createdAt     DateTime @default(now())
+
+  referral      Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@index([referralId])
+  @@index([createdAt])
+}
+
+enum ReferralStatus {
+  PENDING     // Referred user signed up but hasn't converted
+  ACTIVE      // Referred user converted, earning commissions
+  EXPIRED     // Commission period ended
+  CANCELLED   // Referral cancelled
+}
+
+// =====================================
+// PLATFORM IMPORT MODELS
+// =====================================
+
+model PlatformImport {
+  id              String        @id @default(uuid())
+  creatorId       String
+  platform        ImportPlatform
+  status          ImportStatus  @default(PENDING)
+  // Import data (JSON with platform-specific data)
+  importData      Json?
+  // Statistics
+  profileImported Boolean       @default(false)
+  postsImported   Int           @default(0)
+  mediaImported   Int           @default(0)
+  errorsCount     Int           @default(0)
+  errorLog        String?       // JSON array of errors
+  // Timestamps
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  creator         Creator       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([platform])
+}
+
+enum ImportPlatform {
+  ONLYFANS
+  ARSMATE
+  FANSLY
+  OTHER
+}
+
+enum ImportStatus {
+  PENDING         // Waiting to start
+  PROCESSING      // Import in progress
+  COMPLETED       // Successfully completed
+  PARTIAL         // Completed with some errors
+  FAILED          // Failed to import
+  CANCELLED       // Cancelled by user
 }

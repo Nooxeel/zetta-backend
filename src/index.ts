@@ -33,6 +33,12 @@ import socialLinksRoutes from './routes/socialLinks'
 import subscriptionsRoutes from './routes/subscriptions'
 import rouletteRoutes from './routes/roulette'
 import blockedRoutes from './routes/blocked'
+import promocodesRoutes from './routes/promocodes'
+import broadcastsRoutes from './routes/broadcasts'
+import watermarkRoutes from './routes/watermark'
+import ageVerificationRoutes from './routes/age-verification'
+import referralsRoutes from './routes/referrals'
+import importRoutes from './routes/import'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -121,6 +127,12 @@ app.use('/api/subscriptions', subscriptionsRoutes)
 app.use('/api/roulette', rouletteRoutes)
 app.use('/api/creator/block', blockedRoutes)
 app.use('/api/block', blockedRoutes)
+app.use('/api/promocodes', promocodesRoutes)
+app.use('/api/broadcasts', broadcastsRoutes)
+app.use('/api/watermark', watermarkRoutes)
+app.use('/api/age-verification', ageVerificationRoutes)
+app.use('/api/referrals', referralsRoutes)
+app.use('/api/import', importRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
