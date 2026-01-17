@@ -9,7 +9,12 @@
 
 import { WebpayPlus, Options, IntegrationApiKeys, IntegrationCommerceCodes, Environment } from 'transbank-sdk';
 import prisma from '../lib/prisma';
-import { WebpayPaymentType, WebpayStatus } from '@prisma/client';
+import { WebpayPaymentType, WebpayStatus, ProductType, TransactionStatus } from '@prisma/client';
+import { createTransactionLedgerEntries, LEDGER_CODES } from './ledgerService';
+
+// Default fee schedule ID (10% platform fee)
+const DEFAULT_FEE_SCHEDULE_ID = 'default-fee-schedule';
+const PLATFORM_FEE_BPS = 1000; // 10% = 1000 basis points
 
 // ==================== CONFIGURATION ====================
 
@@ -219,12 +224,26 @@ class WebpayService {
 
       // If authorized and it's a subscription, activate it
       if (isAuthorized && webpayTx.paymentType === 'SUBSCRIPTION' && webpayTx.subscriptionTierId) {
-        await this.activateSubscription(webpayTx.userId, webpayTx.subscriptionTierId, webpayTx.creatorId!);
+        await this.activateSubscription(
+          webpayTx.userId, 
+          webpayTx.subscriptionTierId, 
+          webpayTx.creatorId!,
+          webpayTx.id,
+          webpayTx.amount,
+          webpayTx.buyOrder
+        );
       }
 
       // If authorized and it's a donation, record it
       if (isAuthorized && (webpayTx.paymentType === 'DONATION' || webpayTx.paymentType === 'TIP')) {
-        await this.recordDonation(webpayTx.userId, webpayTx.creatorId!, webpayTx.amount, webpayTx.donationMessage);
+        await this.recordDonation(
+          webpayTx.userId, 
+          webpayTx.creatorId!, 
+          webpayTx.amount, 
+          webpayTx.id,
+          webpayTx.buyOrder,
+          webpayTx.donationMessage
+        );
       }
 
       return {
@@ -392,9 +411,16 @@ class WebpayService {
   // ==================== HELPER METHODS ====================
 
   /**
-   * Activate subscription after successful payment
+   * Activate subscription after successful payment and record transaction
    */
-  private async activateSubscription(userId: string, tierId: string, creatorId: string): Promise<void> {
+  private async activateSubscription(
+    userId: string, 
+    tierId: string, 
+    creatorId: string,
+    webpayTxId: string,
+    amount: number,
+    buyOrder: string
+  ): Promise<void> {
     const tier = await prisma.subscriptionTier.findUnique({
       where: { id: tierId },
     });
@@ -406,30 +432,99 @@ class WebpayService {
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + (tier.durationDays || 30));
 
-    await prisma.subscription.upsert({
-      where: {
-        userId_creatorId: {
+    // Calculate fees (10% platform fee)
+    const grossAmount = BigInt(amount);
+    const platformFeeAmount = grossAmount * BigInt(PLATFORM_FEE_BPS) / BigInt(10000);
+    const creatorPayableAmount = grossAmount - platformFeeAmount;
+
+    // Get current fee schedule (the most recent one)
+    let feeSchedule = await prisma.feeSchedule.findFirst({
+      orderBy: { effectiveFrom: 'desc' },
+    });
+
+    if (!feeSchedule) {
+      // Create default if not exists
+      feeSchedule = await prisma.feeSchedule.create({
+        data: {
+          effectiveFrom: new Date(),
+          standardPlatformFeeBps: PLATFORM_FEE_BPS,
+          vipPlatformFeeBps: 700,
+          holdDays: 7,
+          minPayoutClp: BigInt(20000),
+          payoutFrequency: 'WEEKLY',
+          description: 'Default fee schedule',
+        },
+      });
+    }
+
+    // Use a transaction to ensure atomicity
+    await prisma.$transaction(async (tx) => {
+      // 1. Create or update subscription
+      await tx.subscription.upsert({
+        where: {
+          userId_creatorId: {
+            userId: userId,
+            creatorId: creatorId,
+          },
+        },
+        update: {
+          tierId: tierId,
+          status: 'active',
+          startDate: startDate,
+          endDate: endDate,
+        },
+        create: {
           userId: userId,
           creatorId: creatorId,
+          tierId: tierId,
+          status: 'active',
+          startDate: startDate,
+          endDate: endDate,
         },
-      },
-      update: {
-        tierId: tierId,
-        status: 'active',
-        startDate: startDate,
-        endDate: endDate,
-      },
-      create: {
-        userId: userId,
-        creatorId: creatorId,
-        tierId: tierId,
-        status: 'active',
-        startDate: startDate,
-        endDate: endDate,
-      },
+      });
+
+      // 2. Create Transaction record
+      const transaction = await tx.transaction.create({
+        data: {
+          creatorId: creatorId,
+          fanUserId: userId,
+          productType: ProductType.SUBSCRIPTION,
+          currency: 'CLP',
+          grossAmount: grossAmount,
+          appliedFeeScheduleId: feeSchedule!.id,
+          appliedPlatformFeeBps: PLATFORM_FEE_BPS,
+          platformFeeAmount: platformFeeAmount,
+          creatorPayableAmount: creatorPayableAmount,
+          status: TransactionStatus.SUCCEEDED,
+          provider: 'WEBPAY',
+          providerPaymentId: webpayTxId,
+          providerEventId: buyOrder,
+          metadata: {
+            tierId: tierId,
+            tierName: tier.name,
+            durationDays: tier.durationDays || 30,
+          },
+        },
+      });
+
+      // 3. Create ledger entries for double-entry accounting
+      try {
+        await createTransactionLedgerEntries(
+          tx,
+          transaction.id,
+          grossAmount,
+          platformFeeAmount,
+          creatorPayableAmount,
+          creatorId
+        );
+      } catch (ledgerError) {
+        // Log but don't fail if ledger accounts aren't set up
+        console.warn('[Webpay] Could not create ledger entries:', ledgerError);
+      }
     });
 
     console.log(`[Webpay] Subscription activated for user ${userId} to creator ${creatorId}`);
+    console.log(`[Webpay] Transaction recorded: gross=${amount}, platform=${platformFeeAmount}, creator=${creatorPayableAmount}`);
   }
 
   /**
@@ -439,26 +534,88 @@ class WebpayService {
     fromUserId: string,
     creatorId: string,
     amount: number,
+    webpayTxId: string,
+    buyOrder: string,
     message?: string | null
   ): Promise<void> {
     // Calculate platform fee (10%) and creator earnings
-    const platformFee = amount * 0.10;
-    const creatorEarnings = amount - platformFee;
+    const grossAmount = BigInt(amount);
+    const platformFeeAmount = grossAmount * BigInt(PLATFORM_FEE_BPS) / BigInt(10000);
+    const creatorPayableAmount = grossAmount - platformFeeAmount;
 
-    await prisma.donation.create({
-      data: {
-        fromUserId,
-        toCreatorId: creatorId,
-        amount,
-        currency: 'CLP',
-        message: message ?? undefined,
-        platformFee,
-        creatorEarnings,
-        status: 'completed',
-      },
+    // Get current fee schedule
+    let feeSchedule = await prisma.feeSchedule.findFirst({
+      orderBy: { effectiveFrom: 'desc' },
+    });
+
+    if (!feeSchedule) {
+      feeSchedule = await prisma.feeSchedule.create({
+        data: {
+          effectiveFrom: new Date(),
+          standardPlatformFeeBps: PLATFORM_FEE_BPS,
+          vipPlatformFeeBps: 700,
+          holdDays: 7,
+          minPayoutClp: BigInt(20000),
+          payoutFrequency: 'WEEKLY',
+          description: 'Default fee schedule',
+        },
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Create donation record
+      await tx.donation.create({
+        data: {
+          fromUserId,
+          toCreatorId: creatorId,
+          amount,
+          currency: 'CLP',
+          message: message ?? undefined,
+          platformFee: Number(platformFeeAmount),
+          creatorEarnings: Number(creatorPayableAmount),
+          status: 'completed',
+        },
+      });
+
+      // 2. Create Transaction record for earnings tracking
+      const transaction = await tx.transaction.create({
+        data: {
+          creatorId: creatorId,
+          fanUserId: fromUserId,
+          productType: ProductType.TIP,
+          currency: 'CLP',
+          grossAmount: grossAmount,
+          appliedFeeScheduleId: feeSchedule!.id,
+          appliedPlatformFeeBps: PLATFORM_FEE_BPS,
+          platformFeeAmount: platformFeeAmount,
+          creatorPayableAmount: creatorPayableAmount,
+          status: TransactionStatus.SUCCEEDED,
+          provider: 'WEBPAY',
+          providerPaymentId: webpayTxId,
+          providerEventId: buyOrder,
+          metadata: {
+            message: message || null,
+          },
+        },
+      });
+
+      // 3. Create ledger entries
+      try {
+        await createTransactionLedgerEntries(
+          tx,
+          transaction.id,
+          grossAmount,
+          platformFeeAmount,
+          creatorPayableAmount,
+          creatorId
+        );
+      } catch (ledgerError) {
+        console.warn('[Webpay] Could not create ledger entries for donation:', ledgerError);
+      }
     });
 
     console.log(`[Webpay] Donation recorded: ${amount} CLP from ${fromUserId} to creator ${creatorId}`);
+    console.log(`[Webpay] Transaction: gross=${amount}, platform=${platformFeeAmount}, creator=${creatorPayableAmount}`);
   }
 }
 
