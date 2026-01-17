@@ -249,4 +249,160 @@ router.get('/fee-info', authenticate, async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/creator/donations
+ * Lista las donaciones recibidas por el creador
+ */
+router.get('/donations', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as AuthRequest).userId;
+    const { limit = '50', offset = '0' } = req.query;
+
+    const creator = await prisma.creator.findUnique({
+      where: { userId }
+    });
+
+    if (!creator) {
+      return res.status(403).json({ error: 'No eres un creador' });
+    }
+
+    const [donations, total] = await Promise.all([
+      prisma.donation.findMany({
+        where: { toCreatorId: creator.id },
+        orderBy: { createdAt: 'desc' },
+        skip: parseInt(offset as string),
+        take: Math.min(parseInt(limit as string), 100),
+        include: {
+          fromUser: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true
+            }
+          }
+        }
+      }),
+      prisma.donation.count({
+        where: { toCreatorId: creator.id }
+      })
+    ]);
+
+    res.json({
+      donations: donations.map(d => ({
+        id: d.id,
+        amount: d.amount,
+        currency: d.currency,
+        message: d.message,
+        isAnonymous: d.isAnonymous,
+        platformFee: d.platformFee,
+        creatorEarnings: d.creatorEarnings,
+        status: d.status,
+        createdAt: d.createdAt,
+        fromUser: d.isAnonymous ? null : {
+          id: d.fromUser.id,
+          username: d.fromUser.username,
+          displayName: d.fromUser.displayName,
+          avatar: d.fromUser.avatar
+        }
+      })),
+      pagination: {
+        total,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      }
+    });
+  } catch (error) {
+    console.error('Error getting donations:', error);
+    res.status(500).json({ error: 'Error al obtener donaciones' });
+  }
+});
+
+/**
+ * GET /api/creator/subscribers
+ * Lista los suscriptores activos del creador con detalles
+ */
+router.get('/subscribers', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as AuthRequest).userId;
+    const { limit = '50', offset = '0', status = 'active' } = req.query;
+
+    const creator = await prisma.creator.findUnique({
+      where: { userId }
+    });
+
+    if (!creator) {
+      return res.status(403).json({ error: 'No eres un creador' });
+    }
+
+    const [subscriptions, total] = await Promise.all([
+      prisma.subscription.findMany({
+        where: { 
+          creatorId: creator.id,
+          status: status as string
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: parseInt(offset as string),
+        take: Math.min(parseInt(limit as string), 100),
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true
+            }
+          },
+          tier: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              currency: true,
+              durationDays: true
+            }
+          }
+        }
+      }),
+      prisma.subscription.count({
+        where: { 
+          creatorId: creator.id,
+          status: status as string
+        }
+      })
+    ]);
+
+    res.json({
+      subscribers: subscriptions.map(s => ({
+        id: s.id,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        status: s.status,
+        autoRenew: s.autoRenew,
+        user: {
+          id: s.user.id,
+          username: s.user.username,
+          displayName: s.user.displayName,
+          avatar: s.user.avatar
+        },
+        tier: {
+          id: s.tier.id,
+          name: s.tier.name,
+          price: s.tier.price,
+          currency: s.tier.currency,
+          durationDays: s.tier.durationDays
+        }
+      })),
+      pagination: {
+        total,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      }
+    });
+  } catch (error) {
+    console.error('Error getting subscribers:', error);
+    res.status(500).json({ error: 'Error al obtener suscriptores' });
+  }
+});
+
 export default router;
