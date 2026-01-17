@@ -103,6 +103,28 @@ router.post('/conversations', authenticate, async (req: Request, res: Response) 
       return res.status(404).json({ error: 'User not found' })
     }
 
+    // Check if either user has blocked the other
+    const blockCheck = await prisma.blockedUser.findFirst({
+      where: {
+        OR: [
+          // Check if recipient (as creator) blocked the current user
+          {
+            creator: { userId: recipientId },
+            blockedUserId: userId
+          },
+          // Check if current user (as creator) blocked the recipient
+          {
+            creator: { userId: userId },
+            blockedUserId: recipientId
+          }
+        ]
+      }
+    })
+
+    if (blockCheck) {
+      return res.status(403).json({ error: 'No puedes enviar mensajes a este usuario' })
+    }
+
     // Check if conversation already exists (in either direction)
     let conversation = await prisma.conversation.findFirst({
       where: {
@@ -251,6 +273,37 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
 
     if (conversation.participant1Id !== userId && conversation.participant2Id !== userId) {
       return res.status(403).json({ error: 'Not authorized to send messages in this conversation' })
+    }
+
+    // Check if conversation is blocked
+    if (conversation.status === 'blocked') {
+      return res.status(403).json({ error: 'Esta conversación ha sido bloqueada' })
+    }
+
+    const otherUserId = conversation.participant1Id === userId 
+      ? conversation.participant2Id 
+      : conversation.participant1Id
+
+    // Check if either user has blocked the other
+    const blockCheck = await prisma.blockedUser.findFirst({
+      where: {
+        OR: [
+          // Check if other user (as creator) blocked the current user
+          {
+            creator: { userId: otherUserId },
+            blockedUserId: userId
+          },
+          // Check if current user (as creator) blocked the other user
+          {
+            creator: { userId: userId },
+            blockedUserId: otherUserId
+          }
+        ]
+      }
+    })
+
+    if (blockCheck) {
+      return res.status(403).json({ error: 'No puedes enviar mensajes a este usuario' })
     }
 
     const isParticipant1 = conversation.participant1Id === userId
