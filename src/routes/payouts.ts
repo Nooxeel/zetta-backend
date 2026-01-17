@@ -33,19 +33,35 @@ router.get('/eligibility', authenticate, async (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Perfil de creador no encontrado' });
     }
 
-    const eligibility = await calculatePayoutEligibility(creator.id);
+    try {
+      const eligibility = await calculatePayoutEligibility(creator.id);
 
-    res.json({
-      canCreatePayout: eligibility.canCreatePayout,
-      reason: eligibility.reason,
-      totals: {
-        grossTotal: eligibility.totals.grossTotal.toString(),
-        platformFeeTotal: eligibility.totals.platformFeeTotal.toString(),
-        creatorPayableTotal: eligibility.totals.creatorPayableTotal.toString()
-      },
-      eligibleTransactionsCount: eligibility.eligibleTransactions.length,
-      pendingHoldCount: eligibility.holdNotReleasedCount
-    });
+      res.json({
+        canCreatePayout: eligibility.canCreatePayout,
+        reason: eligibility.reason,
+        totals: {
+          grossTotal: eligibility.totals.grossTotal.toString(),
+          platformFeeTotal: eligibility.totals.platformFeeTotal.toString(),
+          creatorPayableTotal: eligibility.totals.creatorPayableTotal.toString()
+        },
+        eligibleTransactionsCount: eligibility.eligibleTransactions.length,
+        pendingHoldCount: eligibility.holdNotReleasedCount
+      });
+    } catch (e) {
+      // If fee schedule not configured, return empty eligibility
+      console.log('Payout eligibility calculation failed (likely no FeeSchedule):', e);
+      res.json({
+        canCreatePayout: false,
+        reason: 'Sistema de pagos no configurado',
+        totals: {
+          grossTotal: '0',
+          platformFeeTotal: '0',
+          creatorPayableTotal: '0'
+        },
+        eligibleTransactionsCount: 0,
+        pendingHoldCount: 0
+      });
+    }
   } catch (error) {
     logger.error('[Payouts] Error calculating eligibility:', error);
     res.status(500).json({ error: 'Error calculando elegibilidad' });

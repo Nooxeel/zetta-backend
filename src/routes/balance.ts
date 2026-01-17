@@ -28,41 +28,75 @@ router.get('/balance', authenticate, async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'No eres un creador' });
     }
 
-    // Obtener balance y configuración
-    const [balance, feeSchedule] = await Promise.all([
-      getCreatorBalance(creator.id),
-      getActiveFeeSchedule()
-    ]);
+    // Intentar obtener balance y configuración
+    // Si no hay sistema de pagos configurado, devolver valores por defecto
+    let balance = { payable: 0n, paid: 0n };
+    let feeSchedule = {
+      holdDays: 7,
+      minPayoutClp: 20000n,
+      payoutFrequency: 'WEEKLY'
+    };
+    let availableAmount = 0n;
+    let pendingAmount = 0n;
+
+    try {
+      // Intentar obtener fee schedule
+      const schedule = await getActiveFeeSchedule();
+      feeSchedule = {
+        holdDays: schedule.holdDays,
+        minPayoutClp: schedule.minPayoutClp,
+        payoutFrequency: schedule.payoutFrequency
+      };
+    } catch (e) {
+      // No hay FeeSchedule configurado, usar valores por defecto
+      console.log('No FeeSchedule configured, using defaults');
+    }
+
+    try {
+      // Intentar obtener balance del ledger
+      balance = await getCreatorBalance(creator.id);
+    } catch (e) {
+      // No hay ledger configurado, usar valores por defecto
+      console.log('No Ledger configured, using defaults');
+    }
 
     // Calcular cuánto está disponible (hold liberado)
     const holdReleaseDate = new Date();
     holdReleaseDate.setDate(holdReleaseDate.getDate() - feeSchedule.holdDays);
 
-    const availableTransactions = await prisma.transaction.aggregate({
-      where: {
-        creatorId: creator.id,
-        status: 'SUCCEEDED',
-        occurredAt: { lte: holdReleaseDate },
-        payoutItems: { none: {} } // No incluido en ningún payout
-      },
-      _sum: { creatorPayableAmount: true }
-    });
+    try {
+      const availableTransactions = await prisma.transaction.aggregate({
+        where: {
+          creatorId: creator.id,
+          status: 'SUCCEEDED',
+          occurredAt: { lte: holdReleaseDate },
+          payoutItems: { none: {} }
+        },
+        _sum: { creatorPayableAmount: true }
+      });
 
-    const pendingTransactions = await prisma.transaction.aggregate({
-      where: {
-        creatorId: creator.id,
-        status: 'SUCCEEDED',
-        occurredAt: { gt: holdReleaseDate },
-        payoutItems: { none: {} }
-      },
-      _sum: { creatorPayableAmount: true }
-    });
+      const pendingTransactions = await prisma.transaction.aggregate({
+        where: {
+          creatorId: creator.id,
+          status: 'SUCCEEDED',
+          occurredAt: { gt: holdReleaseDate },
+          payoutItems: { none: {} }
+        },
+        _sum: { creatorPayableAmount: true }
+      });
+
+      availableAmount = availableTransactions._sum.creatorPayableAmount || 0n;
+      pendingAmount = pendingTransactions._sum.creatorPayableAmount || 0n;
+    } catch (e) {
+      // Transactions table might not exist or be empty
+      console.log('Could not aggregate transactions');
+    }
 
     res.json({
       balance: {
         total: balance.payable.toString(),
-        available: (availableTransactions._sum.creatorPayableAmount || 0n).toString(),
-        pending: (pendingTransactions._sum.creatorPayableAmount || 0n).toString(),
+        available: availableAmount.toString(),
+        pending: pendingAmount.toString(),
         paid: balance.paid.toString()
       },
       config: {
@@ -219,7 +253,28 @@ router.get('/fee-info', authenticate, async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'No eres un creador' });
     }
 
-    const feeSchedule = await getActiveFeeSchedule();
+    // Default fee schedule values if not configured
+    let feeSchedule = {
+      standardFeeBps: 1000, // 10%
+      vipFeeBps: 700,       // 7%
+      holdDays: 7,
+      minPayoutClp: 20000n,
+      payoutFrequency: 'WEEKLY'
+    };
+
+    try {
+      const schedule = await getActiveFeeSchedule();
+      feeSchedule = {
+        standardFeeBps: schedule.standardFeeBps,
+        vipFeeBps: schedule.vipFeeBps,
+        holdDays: schedule.holdDays,
+        minPayoutClp: schedule.minPayoutClp,
+        payoutFrequency: schedule.payoutFrequency
+      };
+    } catch (e) {
+      console.log('No FeeSchedule configured, using defaults');
+    }
+
     const currentFeeBps = creator.tier === 'VIP' 
       ? feeSchedule.vipFeeBps 
       : feeSchedule.standardFeeBps;
