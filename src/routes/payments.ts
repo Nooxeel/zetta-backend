@@ -151,6 +151,8 @@ router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) =
  * 2. Abort (user clicked cancel): receives TBK_TOKEN, TBK_ORDEN_COMPRA, TBK_ID_SESION
  * 3. Timeout: receives TBK_ID_SESION, TBK_ORDEN_COMPRA (no token)
  * 4. Error + volver: receives token_ws, TBK_TOKEN, TBK_ID_SESION, TBK_ORDEN_COMPRA
+ * 
+ * If called with Accept: application/json header, returns JSON instead of redirect
  */
 router.get('/return', async (req: Request, res: Response) => {
   try {
@@ -162,6 +164,10 @@ router.get('/return', async (req: Request, res: Response) => {
     } = req.query as Record<string, string | undefined>;
 
     console.log('[Webpay] Return received:', { token_ws, TBK_TOKEN, TBK_ORDEN_COMPRA, TBK_ID_SESION });
+
+    // Check if this is an API call (from frontend fetch) or browser redirect
+    const isApiCall = req.headers.accept?.includes('application/json') || 
+                      req.headers['x-requested-with'] === 'XMLHttpRequest';
 
     let result;
 
@@ -184,10 +190,27 @@ router.get('/return', async (req: Request, res: Response) => {
     }
     else {
       // Unknown state
+      if (isApiCall) {
+        return res.status(400).json({ error: 'Estado de pago desconocido', success: false });
+      }
       return res.redirect(`${FRONTEND_URL}/payments/result?error=unknown_state`);
     }
 
-    // Redirect to frontend with result
+    // If API call, return JSON
+    if (isApiCall) {
+      return res.json({
+        success: result.success,
+        status: result.status,
+        buyOrder: result.buyOrder,
+        amount: result.amount,
+        transactionId: result.transactionId,
+        authorizationCode: result.authorizationCode,
+        cardNumber: result.cardNumber,
+        error: result.errorMessage,
+      });
+    }
+
+    // Otherwise redirect to frontend with result
     const params = new URLSearchParams({
       status: result.status,
       success: String(result.success),
