@@ -407,6 +407,70 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
       }
     })
 
+    // ==========================================
+    // MOCK: Crear Transaction para que aparezca en ganancias
+    // En producción esto lo hace el webhook de la pasarela de pago
+    // ==========================================
+    try {
+      // Buscar FeeSchedule más reciente o crear uno por defecto
+      let feeSchedule = await prisma.feeSchedule.findFirst({
+        orderBy: { effectiveFrom: 'desc' }
+      })
+      
+      if (!feeSchedule) {
+        // Crear un FeeSchedule por defecto si no existe
+        feeSchedule = await prisma.feeSchedule.create({
+          data: {
+            effectiveFrom: new Date(),
+            standardPlatformFeeBps: 1500, // 15% comisión plataforma
+            vipPlatformFeeBps: 1000, // 10% para VIP
+            holdDays: 7,
+            minPayoutClp: BigInt(20000),
+            description: 'Default (Mock)'
+          }
+        })
+        logger.info('Created default FeeSchedule for mock transactions')
+      }
+
+      // Usar fee estándar para mocks
+      const feeBps = feeSchedule.standardPlatformFeeBps
+
+      // Convertir precio a BigInt (asumiendo que tier.price está en la unidad más pequeña o es un valor simple)
+      const grossAmount = BigInt(Math.round(tier.price))
+      const platformFeeAmount = (grossAmount * BigInt(feeBps)) / BigInt(10000)
+      const creatorPayableAmount = grossAmount - platformFeeAmount
+
+      // Crear Transaction mock
+      await prisma.transaction.create({
+        data: {
+          creatorId,
+          fanUserId: userId,
+          productType: 'SUBSCRIPTION',
+          currency: tier.currency || 'CLP',
+          grossAmount,
+          appliedFeeScheduleId: feeSchedule.id,
+          appliedPlatformFeeBps: feeBps,
+          platformFeeAmount,
+          processorFeeAmount: BigInt(0),
+          creatorPayableAmount,
+          status: 'SUCCEEDED',
+          provider: 'MOCK',
+          providerPaymentId: `mock_sub_${subscription.id}_${Date.now()}`,
+          providerEventId: `mock_evt_${subscription.id}_${Date.now()}`,
+          metadata: {
+            subscriptionId: subscription.id,
+            tierId: tier.id,
+            tierName: tier.name,
+            isMock: true
+          }
+        }
+      })
+      logger.info(`Created mock Transaction for subscription ${subscription.id}`)
+    } catch (txError) {
+      // No fallar la suscripción si la Transaction falla
+      logger.warn('Could not create mock Transaction for subscription:', txError)
+    }
+
     res.status(201).json({
       success: true,
       message: 'Suscripción creada exitosamente',
