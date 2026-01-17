@@ -950,3 +950,70 @@ enum ImportStatus {
   FAILED          // Failed to import
   CANCELLED       // Cancelled by user
 }
+
+// ==================== WEBPAY PAYMENTS ====================
+
+model WebpayTransaction {
+  id                String               @id @default(uuid())
+  
+  // User and order info
+  userId            String               // Who is paying
+  buyOrder          String               @unique // Unique order identifier
+  sessionId         String               // Session for tracking
+  
+  // Amount info
+  amount            Int                  // Amount in CLP (integer, no decimals)
+  
+  // What they're paying for
+  paymentType       WebpayPaymentType    // SUBSCRIPTION, DONATION, TIP, CONTENT
+  
+  // Related entities (optional, depends on paymentType)
+  subscriptionTierId String?             // If paying for subscription
+  creatorId          String?             // Creator receiving payment
+  donationMessage    String?             // If it's a donation with message
+  
+  // Webpay specific fields
+  token             String?              @unique // Token from Webpay
+  returnUrl         String               // URL to redirect after payment
+  
+  // Transaction result (filled after commit)
+  status            WebpayStatus         @default(PENDING)
+  responseCode      Int?                 // 0 = approved
+  authorizationCode String?              // Bank authorization code
+  cardNumber        String?              // Last 4 digits (masked)
+  cardType          String?              // VISA, MASTERCARD, etc
+  paymentTypeCode   String?              // VD (debit), VN (credit), etc
+  installmentsNumber Int?                // Number of installments
+  transactionDate   DateTime?            // Webpay transaction date
+  
+  // Error handling
+  errorMessage      String?
+  
+  // Timestamps
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  completedAt       DateTime?
+  
+  @@index([userId])
+  @@index([status])
+  @@index([buyOrder])
+  @@index([creatorId])
+}
+
+enum WebpayPaymentType {
+  SUBSCRIPTION      // Monthly subscription
+  DONATION          // One-time donation/tip
+  TIP               // Tip on content
+  CONTENT           // Buying specific content
+  TOKENS            // Buying platform tokens/credits
+}
+
+enum WebpayStatus {
+  PENDING           // Transaction created, waiting for payment
+  AUTHORIZED        // Payment authorized
+  FAILED            // Payment failed
+  CANCELLED         // User cancelled
+  TIMEOUT           // User didn't complete in time
+  REVERSED          // Payment was reversed
+  REFUNDED          // Payment was refunded
+}

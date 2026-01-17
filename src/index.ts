@@ -39,6 +39,7 @@ import watermarkRoutes from './routes/watermark'
 import ageVerificationRoutes from './routes/age-verification'
 import referralsRoutes from './routes/referrals'
 import importRoutes from './routes/import'
+import paymentsRoutes from './routes/payments'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -142,6 +143,7 @@ app.use('/api/watermark', watermarkRoutes)
 app.use('/api/age-verification', ageVerificationRoutes)
 app.use('/api/referrals', referralsRoutes)
 app.use('/api/import', importRoutes)
+app.use('/api/payments/webpay', paymentsRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
