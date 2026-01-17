@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { sanitizeCreatorProfile } from '../lib/sanitize'
-import { authenticate } from '../middleware/auth'
+import { authenticate, optionalAuthenticate } from '../middleware/auth'
 import { creatorCache } from '../lib/cache'
 import { createLogger } from '../lib/logger'
+import { isUserBlockedByUsername } from '../middleware/blockCheck'
 
 const router = Router()
 const logger = createLogger('Creator')
@@ -100,9 +101,22 @@ async function buildCreatorResponse(username: string) {
 }
 
 // Get creator profile by username (con caché)
-router.get('/username/:username', async (req: Request, res: Response) => {
+router.get('/username/:username', optionalAuthenticate, async (req: Request, res: Response) => {
   try {
     const { username } = req.params
+    const userId = (req as any).userId
+
+    // Verificar si el usuario está bloqueado por este creador
+    if (userId) {
+      const isBlocked = await isUserBlockedByUsername(username, userId)
+      if (isBlocked) {
+        return res.status(403).json({ 
+          error: 'No tienes acceso a este perfil',
+          code: 'USER_BLOCKED'
+        })
+      }
+    }
+
     const cacheKey = `creator:${username}`
 
     // Intentar obtener del caché

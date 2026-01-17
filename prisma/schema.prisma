@@ -41,6 +41,8 @@ model User {
   interests          UserInterest[]
   // Points system
   userPoints         UserPoints?
+  // Block system - users who blocked this user
+  blockedBy          BlockedUser[] @relation("BlockedUser")
 }
 
 model Creator {
@@ -86,6 +88,8 @@ model Creator {
   transactions       Transaction[]
   // Creator interests
   interests          CreatorInterest[]
+  // Block system
+  blockedUsers       BlockedUser[]
 }
 
 model MusicTrack {
@@ -689,4 +693,21 @@ model RouletteSpin {
 
   @@index([userPointsId])
   @@index([createdAt])
+}
+
+// ==================== BLOCK SYSTEM ====================
+
+model BlockedUser {
+  id            String   @id @default(uuid())
+  creatorId     String
+  blockedUserId String
+  reason        String?  // Razón opcional del bloqueo
+  createdAt     DateTime @default(now())
+
+  creator       Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  blockedUser   User     @relation("BlockedUser", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, blockedUserId])
+  @@index([creatorId])
+  @@index([blockedUserId])
 }

@@ -32,6 +32,7 @@ import discoverRoutes from './routes/discover'
 import socialLinksRoutes from './routes/socialLinks'
 import subscriptionsRoutes from './routes/subscriptions'
 import rouletteRoutes from './routes/roulette'
+import blockedRoutes from './routes/blocked'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -118,6 +119,8 @@ app.use('/api/discover', discoverRoutes)
 app.use('/api/sociallinks', socialLinksRoutes)
 app.use('/api/subscriptions', subscriptionsRoutes)
 app.use('/api/roulette', rouletteRoutes)
+app.use('/api/creator/block', blockedRoutes)
+app.use('/api/block', blockedRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
