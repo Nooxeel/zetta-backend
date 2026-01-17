@@ -1,13 +1,18 @@
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
+import compression from 'compression'
 import path from 'path'
 import dotenv from 'dotenv'
 import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
+import { createLogger } from './lib/logger'
 
 // Load environment variables
 dotenv.config()
+
+// Logger para este módulo
+const logger = createLogger('Server')
 
 // Import routes
 import authRoutes from './routes/auth'
@@ -41,19 +46,46 @@ app.set('trust proxy', 1)
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
+    // Lista de orígenes permitidos específicos
     const allowedOrigins = [
       'http://localhost:3000',
       'https://appapacho.vercel.app',
       FRONTEND_URL
-    ]
-    // Allow all Vercel preview deployments
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    ].filter(Boolean)
+
+    // Permitir requests sin origin (mobile apps, Postman, curl)
+    if (!origin) {
+      callback(null, true)
+      return
+    }
+
+    // Verificar si el origen está en la lista permitida
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else if (process.env.NODE_ENV === 'development' && origin.endsWith('.vercel.app')) {
+      // Solo en desarrollo: permitir preview deployments de Vercel
+      logger.debug(`CORS: Permitiendo preview deployment: ${origin}`)
       callback(null, true)
     } else {
+      logger.warn(`CORS blocked request from: ${origin}`)
       callback(new Error('Not allowed by CORS'))
     }
   },
   credentials: true
+}))
+
+// Compresión gzip para respuestas
+app.use(compression({
+  filter: (req, res) => {
+    // No comprimir si el cliente no lo soporta
+    if (req.headers['x-no-compression']) {
+      return false
+    }
+    // Usar la detección por defecto
+    return compression.filter(req, res)
+  },
+  level: 6, // Balance entre velocidad y compresión (1-9)
+  threshold: 1024 // Solo comprimir respuestas > 1KB
 }))
 
 // Security headers with helmet
@@ -125,7 +157,7 @@ const io = new SocketIOServer(httpServer, {
       if (allowedOrigins.includes(origin)) {
         callback(null, true)
       } else {
-        console.warn(`⚠️  CORS blocked WebSocket connection from: ${origin}`)
+        logger.warn(`CORS blocked WebSocket connection from: ${origin}`)
         callback(new Error('Not allowed by CORS'))
       }
     },
@@ -133,32 +165,33 @@ const io = new SocketIOServer(httpServer, {
   }
 })
 
+// WebSocket logger
+const wsLogger = createLogger('WebSocket')
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
-  console.log(`✅ Client connected: ${socket.id}`)
+  wsLogger.debug(`Client connected: ${socket.id}`)
 
   // Join user-specific room
   socket.on('join:user', (userId: string) => {
     socket.join(`user:${userId}`)
-    console.log(`👤 User ${userId} joined their room (socket: ${socket.id})`)
-    console.log(`   Rooms for this socket:`, Array.from(socket.rooms))
+    wsLogger.debug(`User ${userId} joined their room (socket: ${socket.id})`)
   })
 
   // Join conversation room
   socket.on('join:conversation', (conversationId: string) => {
     socket.join(`conversation:${conversationId}`)
-    console.log(`💬 Socket ${socket.id} joined conversation ${conversationId}`)
-    console.log(`   Rooms for this socket:`, Array.from(socket.rooms))
+    wsLogger.debug(`Socket ${socket.id} joined conversation ${conversationId}`)
   })
 
   // Leave conversation room
   socket.on('leave:conversation', (conversationId: string) => {
     socket.leave(`conversation:${conversationId}`)
-    console.log(`👋 Socket ${socket.id} left conversation ${conversationId}`)
+    wsLogger.debug(`Socket ${socket.id} left conversation ${conversationId}`)
   })
 
   socket.on('disconnect', () => {
-    console.log(`❌ Client disconnected: ${socket.id}`)
+    wsLogger.debug(`Client disconnected: ${socket.id}`)
   })
 })
 
@@ -166,8 +199,8 @@ io.on('connection', (socket) => {
 export { io }
 
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
-  console.log(`🔌 WebSocket server ready`)
+  logger.info(`Server running on http://localhost:${PORT}`)
+  logger.info(`WebSocket server ready`)
 
   // Iniciar scheduler de jobs
   startScheduler()

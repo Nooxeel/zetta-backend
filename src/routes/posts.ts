@@ -1,45 +1,17 @@
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
-import jwt from 'jsonwebtoken'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import prisma from '../lib/prisma'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
 import { sanitizePost, sanitizeComment } from '../lib/sanitize'
 import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter } from '../middleware/rateLimiter'
+import { authenticate } from '../middleware/auth'
 import { io } from '../index'
+import { createLogger } from '../lib/logger'
 
 const router = Router()
-const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET
-
-if (!JWT_SECRET) {
-  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
-}
-
-// Middleware de autenticación
-const authenticate = async (req: Request, res: Response, next: Function) => {
-  try {
-    console.log('[AUTH] Checking authorization header...')
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[AUTH] No token provided')
-      return res.status(401).json({ error: 'No token provided' })
-    }
-
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator: boolean }
-    
-    console.log('[AUTH] Token decoded, userId:', decoded.userId)
-    ;(req as any).userId = decoded.userId
-    ;(req as any).isCreator = decoded.isCreator
-    
-    next()
-  } catch (error) {
-    console.log('[AUTH] Token verification failed:', error)
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
+const logger = createLogger('Posts')
 
 // SECURITY: Validate file types by magic bytes
 const validateVideoMagicBytes = (buffer: Buffer): boolean => {
@@ -147,7 +119,7 @@ router.get('/my-posts', authenticate, async (req: Request, res: Response) => {
 
     res.json(formatted)
   } catch (error) {
-    console.error('Get my posts error:', error)
+    logger.error('Get my posts error:', error)
     res.status(500).json({ error: 'Failed to get posts' })
   }
 })
@@ -205,7 +177,7 @@ router.get('/', async (req: Request, res: Response) => {
       hasMore
     })
   } catch (error) {
-    console.error('Get posts error:', error)
+    logger.error('Get posts error:', error)
     res.status(500).json({ error: 'Failed to get posts' })
   }
 })
@@ -247,7 +219,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       content: JSON.parse(post.content)
     })
   } catch (error) {
-    console.error('Get post error:', error)
+    logger.error('Get post error:', error)
     res.status(500).json({ error: 'Failed to get post' })
   }
 })
@@ -258,7 +230,7 @@ router.post('/', createPostLimiter, authenticate, async (req: Request, res: Resp
     const userId = (req as any).userId
     const { title, description, content, visibility, price, requiredTierId } = req.body
 
-    console.log('[CREATE POST] User:', userId)
+    logger.debug('[CREATE POST] User:', userId)
 
     // Verificar que el usuario es creador
     const creator = await prisma.creator.findUnique({
@@ -308,7 +280,7 @@ router.post('/', createPostLimiter, authenticate, async (req: Request, res: Resp
       content: JSON.parse(post.content)
     })
   } catch (error) {
-    console.error('Create post error:', error)
+    logger.error('Create post error:', error)
     res.status(500).json({ error: 'Failed to create post' })
   }
 })
@@ -329,7 +301,7 @@ router.post('/upload-video', uploadLimiter, authenticate, uploadVideo.single('vi
       size: req.file.size
     })
   } catch (error) {
-    console.error('Upload video error:', error)
+    logger.error('Upload video error:', error)
     res.status(500).json({ error: 'Failed to upload video' })
   }
 })
@@ -350,7 +322,7 @@ router.post('/upload-image', uploadLimiter, authenticate, uploadImage.single('im
       size: req.file.size
     })
   } catch (error) {
-    console.error('Upload image error:', error)
+    logger.error('Upload image error:', error)
     res.status(500).json({ error: 'Failed to upload image' })
   }
 })
@@ -422,7 +394,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       content: JSON.parse(updated.content)
     })
   } catch (error) {
-    console.error('Update post error:', error)
+    logger.error('Update post error:', error)
     res.status(500).json({ error: 'Failed to update post' })
   }
 })
@@ -467,7 +439,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
 
     res.json({ success: true })
   } catch (error) {
-    console.error('Delete post error:', error)
+    logger.error('Delete post error:', error)
     res.status(500).json({ error: 'Failed to delete post' })
   }
 })
@@ -566,7 +538,7 @@ router.post('/:id/like', likeLimiter, authenticate, async (req: Request, res: Re
       })
     }
   } catch (error) {
-    console.error('Toggle like error:', error)
+    logger.error('Toggle like error:', error)
     res.status(500).json({ error: 'Failed to toggle like' })
   }
 })
@@ -590,7 +562,7 @@ router.get('/:id/like-status', authenticate, async (req: Request, res: Response)
       liked: !!like
     })
   } catch (error) {
-    console.error('Get like status error:', error)
+    logger.error('Get like status error:', error)
     res.status(500).json({ error: 'Failed to get like status' })
   }
 })
@@ -633,7 +605,7 @@ router.get('/like-status/batch', authenticate, async (req: Request, res: Respons
 
     res.json(response)
   } catch (error) {
-    console.error('Get batch like status error:', error)
+    logger.error('Get batch like status error:', error)
     res.status(500).json({ error: 'Failed to get batch like status' })
   }
 })
@@ -680,7 +652,7 @@ router.get('/:id/comments', async (req: Request, res: Response) => {
       total
     })
   } catch (error) {
-    console.error('Get comments error:', error)
+    logger.error('Get comments error:', error)
     res.status(500).json({ error: 'Failed to get comments' })
   }
 })
@@ -736,7 +708,7 @@ router.post('/:id/comments', commentLimiter, authenticate, async (req: Request, 
 
     res.json(comment)
   } catch (error) {
-    console.error('Create comment error:', error)
+    logger.error('Create comment error:', error)
     res.status(500).json({ error: 'Failed to create comment' })
   }
 })
@@ -785,7 +757,7 @@ router.delete('/comments/:commentId', authenticate, async (req: Request, res: Re
 
     res.json({ success: true })
   } catch (error) {
-    console.error('Delete comment error:', error)
+    logger.error('Delete comment error:', error)
     res.status(500).json({ error: 'Failed to delete comment' })
   }
 })

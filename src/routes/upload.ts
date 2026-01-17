@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createLogger } from '../lib/logger'
 import multer from 'multer'
 import jwt from 'jsonwebtoken'
 import path from 'path'
@@ -6,6 +7,7 @@ import prisma from '../lib/prisma'
 import { profileImageStorage, cloudinary } from '../lib/cloudinary'
 
 const router = Router()
+const logger = createLogger('Upload')
 
 const JWT_SECRET = process.env.JWT_SECRET
 
@@ -89,7 +91,7 @@ router.post('/avatar', authenticate, profileUpload.single('avatar'), async (req:
       url: avatarUrl 
     })
   } catch (error) {
-    console.error('Upload avatar error:', error)
+    logger.error('Upload avatar error:', error)
     res.status(500).json({ error: 'Failed to upload avatar' })
   }
 })
@@ -142,7 +144,7 @@ router.post('/profile', authenticate, profileUpload.single('profileImage'), asyn
       url: profileUrl 
     })
   } catch (error) {
-    console.error('Upload profile error:', error)
+    logger.error('Upload profile error:', error)
     res.status(500).json({ error: 'Failed to upload profile image' })
   }
 })
@@ -195,7 +197,7 @@ router.post('/cover', authenticate, profileUpload.single('coverImage'), async (r
       url: coverUrl
     })
   } catch (error) {
-    console.error('Upload cover error:', error)
+    logger.error('Upload cover error:', error)
     res.status(500).json({ error: 'Failed to upload cover image' })
   }
 })
@@ -223,7 +225,7 @@ router.post('/user/cover', authenticate, profileUpload.single('coverImage'), asy
       url: coverUrl
     })
   } catch (error) {
-    console.error('Upload user cover error:', error)
+    logger.error('Upload user cover error:', error)
     res.status(500).json({ error: 'Failed to upload cover image' })
   }
 })

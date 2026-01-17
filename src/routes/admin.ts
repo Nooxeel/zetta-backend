@@ -17,20 +17,45 @@ import { calculateAllPayouts, getPayoutsPendingRetry } from '../services/payoutS
 import { getPendingChargebacks, getChargebackStats } from '../services/chargebackService';
 import { runJobManually, getSchedulerStatus } from '../jobs/scheduler';
 import prisma from '../lib/prisma';
+import { createLogger } from '../lib/logger';
 
 const router = Router();
+const logger = createLogger('Admin');
 
 // Middleware de autenticación admin
 const adminAuth = (req: Request, res: Response, next: Function) => {
   const adminKey = req.headers['x-admin-key'];
+  const expectedKey = process.env.ADMIN_KEY;
   const nodeEnv = process.env.NODE_ENV;
   
-  // En desarrollo permitir sin key (o si no hay ADMIN_KEY configurado)
-  if (nodeEnv === 'development' || !process.env.ADMIN_KEY) {
+  // En desarrollo, permitir sin key SOLO si no hay ADMIN_KEY configurado
+  if (nodeEnv === 'development' && !expectedKey) {
+    logger.warn('⚠️ [Admin] ADMIN_KEY no configurado - acceso permitido en desarrollo');
     return next();
   }
   
-  if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
+  // En producción, SIEMPRE requerir ADMIN_KEY
+  if (!expectedKey) {
+    logger.error('🚫 [Admin] CRITICAL: ADMIN_KEY no configurado en producción');
+    return res.status(500).json({ error: 'Configuración de admin incompleta' });
+  }
+  
+  if (!adminKey) {
+    return res.status(401).json({ error: 'API key requerida' });
+  }
+  
+  // Comparación timing-safe para prevenir timing attacks
+  const crypto = require('crypto');
+  try {
+    const keyBuffer = Buffer.from(adminKey as string, 'utf8');
+    const expectedBuffer = Buffer.from(expectedKey, 'utf8');
+    
+    if (keyBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(keyBuffer, expectedBuffer)) {
+      logger.warn(`🚫 [Admin] Intento de acceso con key inválida desde IP: ${req.ip}`);
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+  } catch (error) {
+    logger.warn(`🚫 [Admin] Error verificando key desde IP: ${req.ip}`);
     return res.status(401).json({ error: 'No autorizado' });
   }
   
@@ -50,7 +75,7 @@ router.get('/outbox/stats', async (req: Request, res: Response) => {
     const stats = await getOutboxStats();
     res.json(stats);
   } catch (error: any) {
-    console.error('[Admin] Error getting outbox stats:', error);
+    logger.error('[Admin] Error getting outbox stats:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -77,7 +102,7 @@ router.post('/outbox/process', async (req: Request, res: Response) => {
       ...result
     });
   } catch (error: any) {
-    console.error('[Admin] Error processing outbox:', error);
+    logger.error('[Admin] Error processing outbox:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -93,7 +118,7 @@ router.post('/outbox/retry-failed', async (req: Request, res: Response) => {
       message: `${count} eventos reseteados para reintento`
     });
   } catch (error: any) {
-    console.error('[Admin] Error retrying failed events:', error);
+    logger.error('[Admin] Error retrying failed events:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -110,7 +135,7 @@ router.post('/outbox/cleanup', async (req: Request, res: Response) => {
       message: `${count} eventos limpiados`
     });
   } catch (error: any) {
-    console.error('[Admin] Error cleaning up outbox:', error);
+    logger.error('[Admin] Error cleaning up outbox:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -161,7 +186,7 @@ router.get('/outbox/events', async (req: Request, res: Response) => {
       count: events.length
     });
   } catch (error: any) {
-    console.error('[Admin] Error listing outbox events:', error);
+    logger.error('[Admin] Error listing outbox events:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -174,14 +199,14 @@ router.get('/outbox/events', async (req: Request, res: Response) => {
  */
 router.post('/payouts/calculate-all', async (req: Request, res: Response) => {
   try {
-    console.log('[Admin] Iniciando cálculo de payouts...');
+    logger.debug('[Admin] Iniciando cálculo de payouts...');
     const result = await calculateAllPayouts();
     res.json({
       message: 'Cálculo completado',
       ...result
     });
   } catch (error: any) {
-    console.error('[Admin] Error calculating payouts:', error);
+    logger.error('[Admin] Error calculating payouts:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -203,7 +228,7 @@ router.get('/payouts/pending-retry', async (req: Request, res: Response) => {
       }))
     });
   } catch (error: any) {
-    console.error('[Admin] Error getting pending retry payouts:', error);
+    logger.error('[Admin] Error getting pending retry payouts:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -258,7 +283,7 @@ router.get('/payouts/list', async (req: Request, res: Response) => {
       count: payouts.length
     });
   } catch (error: any) {
-    console.error('[Admin] Error listing payouts:', error);
+    logger.error('[Admin] Error listing payouts:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -283,7 +308,7 @@ router.get('/chargebacks/pending', async (req: Request, res: Response) => {
       }))
     });
   } catch (error: any) {
-    console.error('[Admin] Error getting pending chargebacks:', error);
+    logger.error('[Admin] Error getting pending chargebacks:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -355,7 +380,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
       }))
     });
   } catch (error: any) {
-    console.error('[Admin] Error getting dashboard:', error);
+    logger.error('[Admin] Error getting dashboard:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -371,7 +396,7 @@ router.get('/jobs/status', async (req: Request, res: Response) => {
     const status = getSchedulerStatus();
     res.json(status);
   } catch (error: any) {
-    console.error('[Admin] Error getting jobs status:', error);
+    logger.error('[Admin] Error getting jobs status:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -384,14 +409,14 @@ router.post('/jobs/run/:jobName', async (req: Request, res: Response) => {
   try {
     const { jobName } = req.params;
     
-    console.log(`[Admin] Ejecutando job manual: ${jobName}`);
+    logger.debug(`[Admin] Ejecutando job manual: ${jobName}`);
     await runJobManually(jobName);
     
     res.json({
       message: `Job '${jobName}' ejecutado exitosamente`
     });
   } catch (error: any) {
-    console.error('[Admin] Error running job:', error);
+    logger.error('[Admin] Error running job:', error);
     res.status(500).json({ error: error.message });
   }
 });

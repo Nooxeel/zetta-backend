@@ -1,29 +1,10 @@
 import express, { Request, Response } from 'express'
+import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import jwt from 'jsonwebtoken'
+import { authenticate } from '../middleware/auth'
 
 const router = express.Router()
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
-
-// Middleware de autenticación
-const authenticate = async (req: Request, res: Response, next: Function) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' })
-    }
-
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-    
-    ;(req as any).user = { userId: decoded.userId }
-    
-    next()
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
+const logger = createLogger('Roulette')
 
 // Prize configuration matching frontend
 const PRIZES = [
@@ -128,7 +109,7 @@ router.get('/points', authenticate, async (req: Request, res: Response): Promise
       lastLoginDate: userPoints.lastLoginDate,
     })
   } catch (error) {
-    console.error('Error fetching user points:', error)
+    logger.error('Error fetching user points:', error)
     res.status(500).json({ error: 'Error fetching points' })
   }
 })
@@ -211,7 +192,7 @@ router.post('/spin', authenticate, async (req: Request, res: Response): Promise<
       totalSpent: updatedUserPoints.totalSpent,
     })
   } catch (error) {
-    console.error('Error spinning roulette:', error)
+    logger.error('Error spinning roulette:', error)
     res.status(500).json({ error: 'Error spinning roulette' })
   }
 })
@@ -244,7 +225,7 @@ router.get('/history', authenticate, async (req: Request, res: Response): Promis
       },
     })
   } catch (error) {
-    console.error('Error fetching roulette history:', error)
+    logger.error('Error fetching roulette history:', error)
     res.status(500).json({ error: 'Error fetching history' })
   }
 })

@@ -1,29 +1,10 @@
 import { Router, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
-
-// Middleware de autenticación
-const authenticate = async (req: Request, res: Response, next: Function) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    
-    (req as any).user = { userId: decoded.userId };
-    
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
+const logger = createLogger('Favorites');
 
 // GET /api/favorites - Obtener favoritos del usuario logueado
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
@@ -69,7 +50,7 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
     
     res.json(formattedFavorites);
   } catch (error) {
-    console.error('Error al obtener favoritos:', error);
+    logger.error('Error al obtener favoritos:', error);
     res.status(500).json({ error: 'Error al obtener favoritos' });
   }
 });
@@ -91,7 +72,7 @@ router.get('/check/:creatorId', authenticate, async (req: Request, res: Response
     
     res.json({ isFavorite: !!favorite });
   } catch (error) {
-    console.error('Error al verificar favorito:', error);
+    logger.error('Error al verificar favorito:', error);
     res.status(500).json({ error: 'Error al verificar favorito' });
   }
 });
@@ -142,7 +123,7 @@ router.post('/:creatorId', authenticate, async (req: Request, res: Response): Pr
     
     res.status(201).json({ message: 'Agregado a favoritos', favorite });
   } catch (error) {
-    console.error('Error al agregar favorito:', error);
+    logger.error('Error al agregar favorito:', error);
     res.status(500).json({ error: 'Error al agregar favorito' });
   }
 });
@@ -178,7 +159,7 @@ router.delete('/:creatorId', authenticate, async (req: Request, res: Response): 
     
     res.json({ message: 'Eliminado de favoritos' });
   } catch (error) {
-    console.error('Error al eliminar favorito:', error);
+    logger.error('Error al eliminar favorito:', error);
     res.status(500).json({ error: 'Error al eliminar favorito' });
   }
 });
@@ -194,7 +175,7 @@ router.get('/count/:creatorId', async (req: Request, res: Response): Promise<voi
     
     res.json({ count });
   } catch (error) {
-    console.error('Error al contar favoritos:', error);
+    logger.error('Error al contar favoritos:', error);
     res.status(500).json({ error: 'Error al contar favoritos' });
   }
 });

@@ -99,6 +99,8 @@ model MusicTrack {
   order      Int      @default(0)
   createdAt  DateTime @default(now())
   creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
 }
 
 model SocialLink {
@@ -133,6 +135,9 @@ model SubscriptionTier {
   updatedAt     DateTime       @updatedAt
   subscriptions Subscription[]
   creator       Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId, isActive])
+  @@index([creatorId, order])
 }
 
 model Subscription {
@@ -192,6 +197,10 @@ model Donation {
   createdAt       DateTime @default(now())
   fromUser        User     @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
   toCreator       Creator  @relation(fields: [toCreatorId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId])
+  @@index([toCreatorId])
+  @@index([toCreatorId, createdAt(sort: Desc)])
 }
 
 model ProfileAuditLog {

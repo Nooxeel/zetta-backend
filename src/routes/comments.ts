@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { createLogger } from '../lib/logger'
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { sanitizeComment } from '../lib/sanitize';
@@ -6,6 +7,7 @@ import { commentLimiter } from '../middleware/rateLimiter';
 import { createCommentSchema, validateData } from '../lib/validators';
 
 const router = Router();
+const logger = createLogger('Comments');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -59,7 +61,7 @@ router.get('/user/my-comments', authenticate, async (req: Request, res: Response
     
     res.json(comments);
   } catch (error) {
-    console.error('Error al obtener comentarios del usuario:', error);
+    logger.error('Error al obtener comentarios del usuario:', error);
     res.status(500).json({ error: 'Error al obtener comentarios' });
   }
 });
@@ -91,7 +93,7 @@ router.get('/:creatorId', async (req: Request, res: Response): Promise<void> => 
     
     res.json(comments);
   } catch (error) {
-    console.error('Error al obtener comentarios:', error);
+    logger.error('Error al obtener comentarios:', error);
     res.status(500).json({ error: 'Error al obtener comentarios' });
   }
 });
@@ -134,7 +136,7 @@ router.get('/:creatorId/pending', authenticate, async (req: Request, res: Respon
     
     res.json(comments);
   } catch (error) {
-    console.error('Error al obtener comentarios pendientes:', error);
+    logger.error('Error al obtener comentarios pendientes:', error);
     res.status(500).json({ error: 'Error al obtener comentarios pendientes' });
   }
 });
@@ -159,7 +161,7 @@ router.get('/:creatorId/stats', async (req: Request, res: Response): Promise<voi
       total: approvedCount + pendingCount
     });
   } catch (error) {
-    console.error('Error al obtener estadísticas de comentarios:', error);
+    logger.error('Error al obtener estadísticas de comentarios:', error);
     res.status(500).json({ error: 'Error al obtener estadísticas' });
   }
 });
@@ -216,7 +218,7 @@ router.post('/:creatorId', commentLimiter, authenticate, async (req: Request, re
     
     res.status(201).json(comment);
   } catch (error) {
-    console.error('Error al crear comentario:', error);
+    logger.error('Error al crear comentario:', error);
     res.status(500).json({ error: 'Error al crear comentario' });
   }
 });
@@ -263,7 +265,7 @@ router.put('/:commentId/approve', authenticate, async (req: Request, res: Respon
     
     res.json(updatedComment);
   } catch (error) {
-    console.error('Error al aprobar comentario:', error);
+    logger.error('Error al aprobar comentario:', error);
     res.status(500).json({ error: 'Error al aprobar comentario' });
   }
 });
@@ -302,7 +304,7 @@ router.delete('/:commentId', authenticate, async (req: Request, res: Response): 
     
     res.json({ message: 'Comentario eliminado' });
   } catch (error) {
-    console.error('Error al eliminar comentario:', error);
+    logger.error('Error al eliminar comentario:', error);
     res.status(500).json({ error: 'Error al eliminar comentario' });
   }
 });

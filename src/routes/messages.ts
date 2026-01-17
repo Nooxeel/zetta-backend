@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express'
+import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
 import { messageLimiter } from '../middleware/rateLimiter'
 import { io } from '../index'
 
 const router = Router()
+const logger = createLogger('Messages')
 
 // Get all conversations for current user
 router.get('/conversations', authenticate, async (req: Request, res: Response) => {
@@ -72,7 +74,7 @@ router.get('/conversations', authenticate, async (req: Request, res: Response) =
 
     res.json(transformed)
   } catch (error) {
-    console.error('Get conversations error:', error)
+    logger.error('Get conversations error:', error)
     res.status(500).json({ error: 'Failed to get conversations' })
   }
 })
@@ -148,7 +150,7 @@ router.post('/conversations', authenticate, async (req: Request, res: Response) 
       createdAt: conversation.createdAt
     })
   } catch (error) {
-    console.error('Create conversation error:', error)
+    logger.error('Create conversation error:', error)
     res.status(500).json({ error: 'Failed to create conversation', details: (error as any).message })
   }
 })
@@ -222,7 +224,7 @@ router.get('/conversations/:conversationId/messages', authenticate, async (req: 
         : null
     })
   } catch (error) {
-    console.error('Get messages error:', error)
+    logger.error('Get messages error:', error)
     res.status(500).json({ error: 'Failed to get messages' })
   }
 })
@@ -287,9 +289,9 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
       })
     ])
 
-    console.log('[Messages] Message created:', message.id)
-    console.log('[Messages] Emitting to conversation:', conversationId)
-    console.log('[Messages] Recipient ID:', isParticipant1 ? conversation.participant2Id : conversation.participant1Id)
+    logger.debug('[Messages] Message created:', message.id)
+    logger.debug('[Messages] Emitting to conversation:', conversationId)
+    logger.debug('[Messages] Recipient ID:', isParticipant1 ? conversation.participant2Id : conversation.participant1Id)
 
     // Emit WebSocket event to conversation room
     io.to(`conversation:${conversationId}`).emit('message:new', message)
@@ -298,7 +300,7 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
     const recipientId = isParticipant1 ? conversation.participant2Id : conversation.participant1Id
     const newUnreadCount = isParticipant1 ? conversation.participant2Unread + 1 : conversation.participant1Unread + 1
     
-    console.log('[Messages] Emitting unread:update to user:', recipientId, 'count:', newUnreadCount)
+    logger.debug('[Messages] Emitting unread:update to user:', recipientId, 'count:', newUnreadCount)
     io.to(`user:${recipientId}`).emit('unread:update', {
       conversationId,
       unreadCount: newUnreadCount
@@ -306,7 +308,7 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
 
     res.status(201).json(message)
   } catch (error) {
-    console.error('Send message error:', error)
+    logger.error('Send message error:', error)
     res.status(500).json({ error: 'Failed to send message' })
   }
 })
@@ -338,7 +340,7 @@ router.get('/unread-count', authenticate, async (req: Request, res: Response) =>
 
     res.json({ unread: totalUnread })
   } catch (error) {
-    console.error('Get unread count error:', error)
+    logger.error('Get unread count error:', error)
     res.status(500).json({ error: 'Failed to get unread count' })
   }
 })
@@ -368,7 +370,7 @@ router.delete('/messages/:messageId', authenticate, async (req: Request, res: Re
 
     res.json({ success: true })
   } catch (error) {
-    console.error('Delete message error:', error)
+    logger.error('Delete message error:', error)
     res.status(500).json({ error: 'Failed to delete message' })
   }
 })
@@ -403,7 +405,7 @@ router.patch('/conversations/:conversationId/status', authenticate, async (req: 
 
     res.json({ success: true })
   } catch (error) {
-    console.error('Update conversation status error:', error)
+    logger.error('Update conversation status error:', error)
     res.status(500).json({ error: 'Failed to update conversation' })
   }
 })

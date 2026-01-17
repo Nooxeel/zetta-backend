@@ -4,8 +4,10 @@ import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma'
 import { registerSchema, loginSchema, validateData } from '../lib/validators'
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
+import { createLogger } from '../lib/logger'
 
 const router = Router()
+const logger = createLogger('Auth')
 
 const JWT_SECRET = process.env.JWT_SECRET
 
@@ -80,7 +82,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       token
     })
   } catch (error) {
-    console.error('Register error:', error)
+    logger.error('Register error:', error)
     res.status(500).json({ error: 'Failed to create user' })
   }
 })
@@ -137,7 +139,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       token
     })
   } catch (error) {
-    console.error('Login error:', error)
+    logger.error('Login error:', error)
     res.status(500).json({ error: 'Failed to login' })
   }
 })
@@ -155,7 +157,13 @@ router.get('/me', async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        isCreator: true,
         creatorProfile: {
           include: {
             musicTracks: true,
@@ -179,7 +187,7 @@ router.get('/me', async (req: Request, res: Response) => {
       creatorProfile: user.creatorProfile
     })
   } catch (error) {
-    console.error('Get me error:', error)
+    logger.error('Get me error:', error)
     res.status(401).json({ error: 'Invalid token' })
   }
 })

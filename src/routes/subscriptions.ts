@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express'
+import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
 
 const router = Router()
+const logger = createLogger('Subscriptions')
 
 // GET /api/subscriptions/tiers/:creatorId - Obtener tiers de un creador (público)
 router.get('/tiers/:creatorId', async (req: Request, res: Response): Promise<void> => {
@@ -19,7 +21,7 @@ router.get('/tiers/:creatorId', async (req: Request, res: Response): Promise<voi
 
     res.json(tiers)
   } catch (error) {
-    console.error('Error al obtener tiers:', error)
+    logger.error('Error al obtener tiers:', error)
     res.status(500).json({ error: 'Error al obtener planes de suscripción' })
   }
 })
@@ -46,7 +48,7 @@ router.get('/my-tiers', authenticate, async (req: Request, res: Response): Promi
 
     res.json(tiers)
   } catch (error) {
-    console.error('Error al obtener mis tiers:', error)
+    logger.error('Error al obtener mis tiers:', error)
     res.status(500).json({ error: 'Error al obtener mis planes' })
   }
 })
@@ -106,7 +108,7 @@ router.post('/tiers', authenticate, async (req: Request, res: Response): Promise
 
     res.status(201).json(tier)
   } catch (error) {
-    console.error('Error al crear tier:', error)
+    logger.error('Error al crear tier:', error)
     res.status(500).json({ error: 'Error al crear plan de suscripción' })
   }
 })
@@ -161,7 +163,7 @@ router.put('/tiers/:tierId', authenticate, async (req: Request, res: Response): 
 
     res.json(tier)
   } catch (error) {
-    console.error('Error al actualizar tier:', error)
+    logger.error('Error al actualizar tier:', error)
     res.status(500).json({ error: 'Error al actualizar plan' })
   }
 })
@@ -211,7 +213,7 @@ router.delete('/tiers/:tierId', authenticate, async (req: Request, res: Response
 
     res.json({ message: 'Plan eliminado correctamente' })
   } catch (error) {
-    console.error('Error al eliminar tier:', error)
+    logger.error('Error al eliminar tier:', error)
     res.status(500).json({ error: 'Error al eliminar plan' })
   }
 })
@@ -245,7 +247,7 @@ router.get('/my-subscriptions', authenticate, async (req: Request, res: Response
 
     res.json(subscriptions)
   } catch (error) {
-    console.error('Error al obtener suscripciones:', error)
+    logger.error('Error al obtener suscripciones:', error)
     res.status(500).json({ error: 'Error al obtener suscripciones' })
   }
 })
@@ -278,7 +280,7 @@ router.get('/check/:creatorId', authenticate, async (req: Request, res: Response
       subscription: subscription || null
     })
   } catch (error) {
-    console.error('Error al verificar suscripción:', error)
+    logger.error('Error al verificar suscripción:', error)
     res.status(500).json({ error: 'Error al verificar suscripción' })
   }
 })
@@ -427,7 +429,7 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
       }
     })
   } catch (error) {
-    console.error('Error al suscribirse:', error)
+    logger.error('Error al suscribirse:', error)
     res.status(500).json({ error: 'Error al procesar suscripción' })
   }
 })
@@ -461,7 +463,7 @@ router.post('/unsubscribe/:creatorId', authenticate, async (req: Request, res: R
 
     res.json({ message: 'Suscripción cancelada. Tendrás acceso hasta el fin del período.' })
   } catch (error) {
-    console.error('Error al cancelar suscripción:', error)
+    logger.error('Error al cancelar suscripción:', error)
     res.status(500).json({ error: 'Error al cancelar suscripción' })
   }
 })
@@ -501,7 +503,7 @@ router.get('/subscribers', authenticate, async (req: Request, res: Response): Pr
 
     res.json(subscribers)
   } catch (error) {
-    console.error('Error al obtener suscriptores:', error)
+    logger.error('Error al obtener suscriptores:', error)
     res.status(500).json({ error: 'Error al obtener suscriptores' })
   }
 })

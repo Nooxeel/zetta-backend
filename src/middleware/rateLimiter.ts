@@ -3,10 +3,31 @@
  * Protege endpoints contra abuso y ataques de fuerza bruta
  */
 import rateLimit from 'express-rate-limit'
+import { Request } from 'express'
+
+/**
+ * Genera una clave única combinando userId (si autenticado) con IP
+ * Esto previene que usuarios autenticados sean afectados por otros usuarios
+ * en la misma IP (NAT, proxies corporativos, etc.)
+ */
+const createKeyGenerator = (prefix: string = '') => {
+  return (req: Request): string => {
+    const userId = (req as any).userId || (req as any).user?.userId
+    const ip = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
+    
+    // Si hay userId, usar combinación de prefix + userId
+    // Si no hay userId (endpoints públicos), usar solo IP
+    if (userId) {
+      return `${prefix}user:${userId}`
+    }
+    return `${prefix}ip:${ip}`
+  }
+}
 
 /**
  * Rate limiter para endpoints de autenticación
  * Muy restrictivo para prevenir ataques de fuerza bruta
+ * Nota: Aquí solo usamos IP porque el usuario aún no está autenticado
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
@@ -18,7 +39,7 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    // Usar X-Forwarded-For para obtener IP real detrás de proxy
+    // Para auth solo usar IP (usuario no autenticado aún)
     return req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
   }
 })
@@ -51,6 +72,7 @@ export const createPostLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: createKeyGenerator('post:')
 })
 
 /**
@@ -66,6 +88,7 @@ export const commentLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: createKeyGenerator('comment:')
 })
 
 /**
@@ -81,6 +104,7 @@ export const uploadLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: createKeyGenerator('upload:')
 })
 
 /**
@@ -96,6 +120,7 @@ export const messageLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: createKeyGenerator('msg:')
 })
 
 /**

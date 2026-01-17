@@ -11,8 +11,10 @@ import {
   calculateAllPayouts,
   getPayoutsPendingRetry
 } from '../services/payoutService';
+import { createLogger } from '../lib/logger';
 
 const router = Router();
+const logger = createLogger('Payouts');
 
 /**
  * GET /api/payouts/eligibility
@@ -45,7 +47,7 @@ router.get('/eligibility', authenticate, async (req: AuthRequest, res: Response)
       pendingHoldCount: eligibility.holdNotReleasedCount
     });
   } catch (error) {
-    console.error('[Payouts] Error calculating eligibility:', error);
+    logger.error('[Payouts] Error calculating eligibility:', error);
     res.status(500).json({ error: 'Error calculando elegibilidad' });
   }
 });
@@ -107,7 +109,7 @@ router.post('/request', authenticate, async (req: AuthRequest, res: Response) =>
       }
     });
   } catch (error) {
-    console.error('[Payouts] Error creating payout:', error);
+    logger.error('[Payouts] Error creating payout:', error);
     res.status(500).json({ error: 'Error creando payout' });
   }
 });
@@ -167,7 +169,7 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
       }
     });
   } catch (error) {
-    console.error('[Payouts] Error fetching history:', error);
+    logger.error('[Payouts] Error fetching history:', error);
     res.status(500).json({ error: 'Error obteniendo historial' });
   }
 });
@@ -243,7 +245,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('[Payouts] Error fetching payout:', error);
+    logger.error('[Payouts] Error fetching payout:', error);
     res.status(500).json({ error: 'Error obteniendo payout' });
   }
 });
@@ -263,7 +265,7 @@ router.post('/admin/calculate-all', async (req: Request, res: Response) => {
   }
 
   try {
-    console.log('[Admin] Iniciando cálculo de payouts para todos los creadores...');
+    logger.debug('[Admin] Iniciando cálculo de payouts para todos los creadores...');
     const result = await calculateAllPayouts();
     
     res.json({
@@ -273,7 +275,7 @@ router.post('/admin/calculate-all', async (req: Request, res: Response) => {
       errors: result.errors
     });
   } catch (error) {
-    console.error('[Admin] Error calculating all payouts:', error);
+    logger.error('[Admin] Error calculating all payouts:', error);
     res.status(500).json({ error: 'Error calculando payouts' });
   }
 });
@@ -301,7 +303,7 @@ router.get('/admin/pending-retry', async (req: Request, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('[Admin] Error fetching pending retry:', error);
+    logger.error('[Admin] Error fetching pending retry:', error);
     res.status(500).json({ error: 'Error obteniendo payouts pendientes' });
   }
 });

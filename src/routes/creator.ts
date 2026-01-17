@@ -1,126 +1,131 @@
 import { Router, Request, Response } from 'express'
-import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma'
 import { sanitizeCreatorProfile } from '../lib/sanitize'
+import { authenticate } from '../middleware/auth'
+import { creatorCache } from '../lib/cache'
+import { createLogger } from '../lib/logger'
 
 const router = Router()
+const logger = createLogger('Creator')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
-
-// Middleware to verify JWT and get user
-const authenticate = async (req: Request, res: Response, next: Function) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' })
-    }
-
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator: boolean }
-    
-    ;(req as any).userId = decoded.userId
-    ;(req as any).isCreator = decoded.isCreator
-    
-    next()
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
-
-// Get creator profile by username
-router.get('/username/:username', async (req: Request, res: Response) => {
-  try {
-    const { username } = req.params
-
-    const user = await prisma.user.findUnique({
-      where: { username },
-      include: {
-        creatorProfile: {
-          include: {
-            musicTracks: {
-              orderBy: { order: 'asc' }
-            },
-            socialLinks: true,
-            subscriptionTiers: {
-              where: { isActive: true },
-              orderBy: { order: 'asc' }
-            },
-            posts: {
-              select: {
-                id: true,
-                likes: true,
-                views: true,
-                content: true
-              }
-            },
-            _count: {
-              select: {
-                subscribers: true,
-                posts: true
-              }
+// Helper para construir respuesta de creador
+async function buildCreatorResponse(username: string) {
+  const user = await prisma.user.findUnique({
+    where: { username },
+    include: {
+      creatorProfile: {
+        include: {
+          musicTracks: {
+            orderBy: { order: 'asc' }
+          },
+          socialLinks: true,
+          subscriptionTiers: {
+            where: { isActive: true },
+            orderBy: { order: 'asc' }
+          },
+          posts: {
+            select: {
+              id: true,
+              likes: true,
+              views: true,
+              content: true
+            }
+          },
+          _count: {
+            select: {
+              subscribers: true,
+              posts: true
             }
           }
         }
       }
-    })
+    }
+  })
 
-    if (!user || !user.creatorProfile) {
+  if (!user || !user.creatorProfile) {
+    return null
+  }
+
+  // Calculate stats
+  const posts = user.creatorProfile.posts || []
+  const totalLikes = posts.reduce((acc, post) => acc + post.likes, 0)
+  const totalViews = posts.reduce((acc, post) => acc + post.views, 0)
+  
+  // Count media types by parsing content JSON
+  let photosCount = 0
+  let videosCount = 0
+  let audioCount = 0
+  
+  posts.forEach(post => {
+    try {
+      const content = typeof post.content === 'string' 
+        ? JSON.parse(post.content) 
+        : post.content
+      
+      if (Array.isArray(content)) {
+        const hasVideo = content.some((item: any) => item.type === 'video')
+        const hasPhoto = content.some((item: any) => item.type === 'image')
+        const hasAudio = content.some((item: any) => item.type === 'audio')
+        
+        if (hasVideo) videosCount++
+        else if (hasPhoto) photosCount++
+        else if (hasAudio) audioCount++
+      }
+    } catch (e) {
+      // If content parsing fails, skip this post
+    }
+  })
+
+  // Remove posts array from response and add calculated stats
+  const { posts: _, _count, ...creatorProfile } = user.creatorProfile
+
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    avatar: user.avatar,
+    creatorProfile: {
+      ...creatorProfile,
+      stats: {
+        totalLikes,
+        totalViews,
+        postsCount: _count.posts,
+        photosCount,
+        videosCount,
+        subscribersCount: _count.subscribers,
+        audioCount
+      }
+    }
+  }
+}
+
+// Get creator profile by username (con caché)
+router.get('/username/:username', async (req: Request, res: Response) => {
+  try {
+    const { username } = req.params
+    const cacheKey = `creator:${username}`
+
+    // Intentar obtener del caché
+    const cached = creatorCache.get(cacheKey)
+    if (cached) {
+      logger.debug(`Cache hit for creator: ${username}`)
+      return res.json(cached)
+    }
+
+    // Si no está en caché, obtener de la DB
+    const response = await buildCreatorResponse(username)
+
+    if (!response) {
       return res.status(404).json({ error: 'Creator not found' })
     }
 
-    // Calculate stats
-    const posts = user.creatorProfile.posts || []
-    const totalLikes = posts.reduce((acc, post) => acc + post.likes, 0)
-    const totalViews = posts.reduce((acc, post) => acc + post.views, 0)
-    
-    // Count media types by parsing content JSON
-    let photosCount = 0
-    let videosCount = 0
-    let audioCount = 0
-    
-    posts.forEach(post => {
-      try {
-        const content = typeof post.content === 'string' 
-          ? JSON.parse(post.content) 
-          : post.content
-        
-        if (Array.isArray(content)) {
-          const hasVideo = content.some((item: any) => item.type === 'video')
-          const hasPhoto = content.some((item: any) => item.type === 'image')
-          const hasAudio = content.some((item: any) => item.type === 'audio')
-          
-          if (hasVideo) videosCount++
-          else if (hasPhoto) photosCount++
-          else if (hasAudio) audioCount++
-        }
-      } catch (e) {
-        // If content parsing fails, skip this post
-      }
-    })
+    // Guardar en caché
+    creatorCache.set(cacheKey, response)
+    logger.debug(`Cache miss, stored creator: ${username}`)
 
-    // Remove posts array from response and add calculated stats
-    const { posts: _, _count, ...creatorProfile } = user.creatorProfile
-
-    res.json({
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      avatar: user.avatar,
-      creatorProfile: {
-        ...creatorProfile,
-        stats: {
-          totalLikes,
-          totalViews,
-          postsCount: _count.posts,
-          photosCount,
-          videosCount,
-          subscribersCount: _count.subscribers,
-          audioCount
-        }
-      }
-    })
+    res.json(response)
   } catch (error) {
-    console.error('Get creator error:', error)
+    logger.error('Get creator error:', error)
     res.status(500).json({ error: 'Failed to get creator' })
   }
 })
@@ -158,7 +163,7 @@ router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
       offset: Number(offset)
     })
   } catch (error) {
-    console.error('Get audit logs error:', error)
+    logger.error('Get audit logs error:', error)
     res.status(500).json({ error: 'Failed to get audit logs' })
   }
 })
@@ -168,7 +173,7 @@ router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
 router.get('/profile', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
-    console.log('[GET /profile] Searching creator for userId:', userId)
+    logger.debug('Searching creator for userId:', userId)
 
     const creator = await prisma.creator.findUnique({
       where: { userId },
@@ -189,7 +194,7 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
       }
     })
 
-    console.log('[GET /profile] Creator found:', creator ? 'YES' : 'NO')
+    logger.debug('Creator found:', creator ? 'YES' : 'NO')
 
     if (!creator) {
       return res.status(404).json({ error: 'Creator not found' })
@@ -197,7 +202,7 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
 
     res.json(creator)
   } catch (error) {
-    console.error('Get creator profile error:', error)
+    logger.error('Get creator profile error:', error)
     res.status(500).json({ error: 'Failed to get creator profile' })
   }
 })
@@ -235,7 +240,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     res.json(creator)
   } catch (error) {
-    console.error('Get creator error:', error)
+    logger.error('Get creator error:', error)
     res.status(500).json({ error: 'Failed to get creator' })
   }
 })
@@ -262,11 +267,19 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
 
     // Get creator profile
     const creator = await prisma.creator.findUnique({
-      where: { userId }
+      where: { userId },
+      include: { user: { select: { username: true } } }
     })
 
     if (!creator) {
       return res.status(404).json({ error: 'Creator profile not found' })
+    }
+
+    // Invalidar caché del creador
+    const username = creator.user?.username
+    if (username) {
+      creatorCache.delete(`creator:${username}`)
+      logger.debug(`Invalidated cache for creator: ${username}`)
     }
 
     // Get client info for audit
@@ -362,7 +375,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
 
     res.json(updated)
   } catch (error) {
-    console.error('Update profile error:', error)
+    logger.error('Update profile error:', error)
     res.status(500).json({ error: 'Failed to update profile' })
   }
 })
@@ -399,9 +412,16 @@ router.post('/music', authenticate, async (req: Request, res: Response) => {
       }
     })
 
+    // Invalidar caché del creador
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } })
+    if (user?.username) {
+      creatorCache.delete(user.username)
+      logger.debug('Cache invalidated for', user.username)
+    }
+
     res.status(201).json(track)
   } catch (error) {
-    console.error('Add music error:', error)
+    logger.error('Add music error:', error)
     res.status(500).json({ error: 'Failed to add music track' })
   }
 })
@@ -433,9 +453,16 @@ router.delete('/music/:trackId', authenticate, async (req: Request, res: Respons
       where: { id: trackId }
     })
 
+    // Invalidar caché del creador
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } })
+    if (user?.username) {
+      creatorCache.delete(user.username)
+      logger.debug('Cache invalidated for', user.username)
+    }
+
     res.json({ message: 'Track deleted' })
   } catch (error) {
-    console.error('Delete music error:', error)
+    logger.error('Delete music error:', error)
     res.status(500).json({ error: 'Failed to delete music track' })
   }
 })
@@ -473,7 +500,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     res.json(creators)
   } catch (error) {
-    console.error('Get creators error:', error)
+    logger.error('Get creators error:', error)
     res.status(500).json({ error: 'Failed to get creators' })
   }
 })
@@ -500,7 +527,7 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
       totalPostComments: commentsResult._sum.comments || 0
     })
   } catch (error) {
-    console.error('Get creator stats error:', error)
+    logger.error('Get creator stats error:', error)
     res.status(500).json({ error: 'Failed to get creator stats' })
   }
 })
