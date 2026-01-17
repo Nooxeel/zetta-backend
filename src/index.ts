@@ -98,7 +98,16 @@ app.use(compression({
 // Security headers with helmet
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow static files from other origins
-  contentSecurityPolicy: false // Let frontend handle CSP
+  contentSecurityPolicy: false, // Let frontend handle CSP
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  xssFilter: true,
+  noSniff: true,
+  frameguard: { action: 'deny' }
 }))
 
 app.use(express.json({ limit: '10mb' })) // Limit request body size
