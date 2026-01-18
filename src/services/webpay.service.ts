@@ -19,19 +19,42 @@ const PLATFORM_FEE_BPS = 1000; // 10% = 1000 basis points
 
 // ==================== CONFIGURATION ====================
 
-// Integration (test) credentials
-const WEBPAY_CONFIG = {
-  environment: Environment.Integration,
-  commerceCode: IntegrationCommerceCodes.WEBPAY_PLUS, // 597055555532
-  apiKey: IntegrationApiKeys.WEBPAY, // 579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C
-};
+// Get Webpay configuration based on environment
+function getWebpayConfig() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    // Production: require environment variables
+    const commerceCode = process.env.WEBPAY_COMMERCE_CODE;
+    const apiKey = process.env.WEBPAY_API_KEY;
+    
+    if (!commerceCode || !apiKey) {
+      throw new Error('CRITICAL: WEBPAY_COMMERCE_CODE and WEBPAY_API_KEY must be set in production');
+    }
+    
+    return {
+      environment: Environment.Production,
+      commerceCode,
+      apiKey,
+    };
+  }
+  
+  // Development/Integration: use test credentials
+  return {
+    environment: Environment.Integration,
+    commerceCode: IntegrationCommerceCodes.WEBPAY_PLUS,
+    apiKey: IntegrationApiKeys.WEBPAY,
+  };
+}
 
-// For production, use environment variables:
-// const WEBPAY_PROD_CONFIG = {
-//   environment: Environment.Production,
-//   commerceCode: process.env.WEBPAY_COMMERCE_CODE!,
-//   apiKey: process.env.WEBPAY_API_KEY!,
-// };
+// Lazy-loaded config to defer validation until first use
+let _webpayConfig: ReturnType<typeof getWebpayConfig> | null = null;
+const getConfig = () => {
+  if (!_webpayConfig) {
+    _webpayConfig = getWebpayConfig();
+  }
+  return _webpayConfig;
+};
 
 // ==================== TYPES ====================
 
@@ -64,11 +87,12 @@ class WebpayService {
   private transaction: InstanceType<typeof WebpayPlus.Transaction>;
 
   constructor() {
-    // Initialize with integration credentials
+    // Initialize with environment-appropriate credentials
+    const config = getConfig();
     const options = new Options(
-      WEBPAY_CONFIG.commerceCode,
-      WEBPAY_CONFIG.apiKey,
-      WEBPAY_CONFIG.environment
+      config.commerceCode,
+      config.apiKey,
+      config.environment
     );
     this.transaction = new WebpayPlus.Transaction(options);
   }

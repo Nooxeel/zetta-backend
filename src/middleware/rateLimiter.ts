@@ -204,6 +204,55 @@ export const paymentLimiter = rateLimit({
 })
 
 /**
+ * Rate limiter para consultas de perfiles públicos
+ * Previene enumeración y scraping
+ */
+export const publicProfileLimiter = rateLimit({
+  ...commonOptions,
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // 100 consultas por 15 min
+  message: { 
+    error: 'Demasiadas consultas. Por favor, espera un momento.',
+    retryAfter: 15 * 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+/**
+ * Rate limiter para búsquedas
+ * Previene abuso de endpoints de búsqueda
+ */
+export const searchLimiter = rateLimit({
+  ...commonOptions,
+  windowMs: 60 * 1000, // 1 minuto
+  max: 30, // 30 búsquedas por minuto
+  message: { 
+    error: 'Demasiadas búsquedas. Por favor, espera un momento.',
+    retryAfter: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: createKeyGenerator('search:')
+})
+
+/**
+ * Rate limiter para vistas de posts
+ * Más generoso pero protege contra bots
+ */
+export const viewLimiter = rateLimit({
+  ...commonOptions,
+  windowMs: 60 * 1000, // 1 minuto
+  max: 120, // 120 vistas por minuto
+  message: { 
+    error: 'Demasiadas solicitudes.',
+    retryAfter: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+/**
  * Utility: Validate and sanitize pagination parameters
  * Returns safe values with bounds checking
  * Uses Prisma naming convention: take (limit) and skip (offset)

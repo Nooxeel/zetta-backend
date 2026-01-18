@@ -5,7 +5,7 @@ import { authenticate, optionalAuthenticate } from '../middleware/auth'
 import { creatorCache } from '../lib/cache'
 import { createLogger } from '../lib/logger'
 import { isUserBlockedByUsername } from '../middleware/blockCheck'
-import { sanitizePagination } from '../middleware/rateLimiter'
+import { sanitizePagination, publicProfileLimiter } from '../middleware/rateLimiter'
 
 const router = Router()
 const logger = createLogger('Creator')
@@ -102,7 +102,8 @@ async function buildCreatorResponse(username: string) {
 }
 
 // Get creator profile by username (con caché)
-router.get('/username/:username', optionalAuthenticate, async (req: Request, res: Response) => {
+// Rate limited to prevent profile enumeration
+router.get('/username/:username', publicProfileLimiter, optionalAuthenticate, async (req: Request, res: Response) => {
   try {
     const { username } = req.params
     const userId = (req as any).userId

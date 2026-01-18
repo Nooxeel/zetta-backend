@@ -47,6 +47,38 @@ export async function isUserBlockedByUsername(creatorUsername: string, userId: s
 }
 
 /**
+ * Verifica si existe un bloqueo entre dos usuarios (en cualquier dirección)
+ * Útil para mensajes donde cualquiera puede haber bloqueado al otro
+ * @param userId1 - ID del primer usuario
+ * @param userId2 - ID del segundo usuario
+ * @returns true si hay algún bloqueo, false si no
+ */
+export async function isAnyBlockBetweenUsers(userId1: string, userId2: string): Promise<boolean> {
+  if (!userId1 || !userId2) return false
+  
+  // Get creator profiles for both users (if they have them)
+  const [creator1, creator2] = await Promise.all([
+    prisma.creator.findUnique({ where: { userId: userId1 }, select: { id: true } }),
+    prisma.creator.findUnique({ where: { userId: userId2 }, select: { id: true } })
+  ])
+  
+  // Check all possible block combinations
+  const checks: Promise<boolean>[] = []
+  
+  if (creator1) {
+    checks.push(isUserBlocked(creator1.id, userId2))
+  }
+  if (creator2) {
+    checks.push(isUserBlocked(creator2.id, userId1))
+  }
+  
+  if (checks.length === 0) return false
+  
+  const results = await Promise.all(checks)
+  return results.some(blocked => blocked)
+}
+
+/**
  * Middleware factory que verifica si el usuario autenticado está bloqueado por el creador
  * Requiere que el creatorId esté en req.params.creatorId o se pase como argumento
  */
@@ -131,6 +163,7 @@ export function checkBlockedByUsernameMiddleware() {
 export default {
   isUserBlocked,
   isUserBlockedByUsername,
+  isAnyBlockBetweenUsers,
   checkBlockedMiddleware,
   checkBlockedByUsernameMiddleware
 }

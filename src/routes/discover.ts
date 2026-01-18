@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { authenticate, AuthRequest } from '../middleware/auth'
-import { sanitizePagination } from '../middleware/rateLimiter'
+import { sanitizePagination, searchLimiter, publicProfileLimiter } from '../middleware/rateLimiter'
 
 const router = Router()
 
 // Discover creators by interests (public or authenticated)
-router.get('/creators', async (req: Request, res: Response) => {
+// Rate limited to prevent scraping
+router.get('/creators', publicProfileLimiter, async (req: Request, res: Response) => {
   try {
     const { interestIds } = req.query
     const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20)
@@ -251,7 +252,8 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
 })
 
 // Search creators by interests AND keywords
-router.get('/search', async (req: Request, res: Response) => {
+// Rate limited to prevent abuse
+router.get('/search', searchLimiter, async (req: Request, res: Response) => {
   try {
     const { query, interestIds } = req.query
     const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20)

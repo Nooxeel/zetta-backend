@@ -12,6 +12,7 @@ import {
   getPayoutsPendingRetry
 } from '../services/payoutService';
 import { createLogger } from '../lib/logger';
+import { sanitizePagination } from '../middleware/rateLimiter';
 
 const router = Router();
 const logger = createLogger('Payouts');
@@ -137,9 +138,9 @@ router.post('/request', authenticate, async (req: AuthRequest, res: Response) =>
 router.get('/history', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const skip = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const { take, skip: baseSkip } = sanitizePagination(req.query.limit as string, undefined, 50, 10);
+    const skip = (page - 1) * take;
 
     const creator = await prisma.creator.findUnique({
       where: { userId }
@@ -154,7 +155,7 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
         where: { creatorId: creator.id },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take,
         include: {
           _count: { select: { items: true } }
         }
@@ -179,9 +180,9 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
       })),
       pagination: {
         page,
-        limit,
+        limit: take,
         total,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / take)
       }
     });
   } catch (error) {

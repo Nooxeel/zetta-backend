@@ -54,22 +54,22 @@ router.post('/payment-processor', async (req: Request, res: Response) => {
   const signature = req.headers['x-webhook-signature'] as string;
   const webhookSecret = process.env.WEBHOOK_SECRET;
 
-  // En desarrollo sin WEBHOOK_SECRET, permitir (con advertencia)
-  if (process.env.NODE_ENV === 'development' && !webhookSecret) {
-    logger.warn('[Webhook] ⚠️ WEBHOOK_SECRET no configurado - verificación deshabilitada en desarrollo');
-  } else if (!webhookSecret) {
-    logger.error('[Webhook] CRITICAL: WEBHOOK_SECRET no configurado en producción');
-    return res.status(500).json({ error: 'Webhook no configurado correctamente' });
-  } else if (!signature) {
-    logger.warn('[Webhook] Firma no proporcionada');
-    return res.status(401).json({ error: 'Firma requerida' });
-  } else {
-    // Verificar firma con HMAC timing-safe
-    const payload = JSON.stringify(req.body);
-    if (!verifyWebhookSignature(payload, signature, webhookSecret)) {
-      logger.warn('[Webhook] Firma inválida - posible intento de falsificación');
-      return res.status(401).json({ error: 'Firma inválida' });
-    }
+  // SECURITY: Always require webhook secret in all environments
+  if (!webhookSecret) {
+    logger.error('[Webhook] CRITICAL: WEBHOOK_SECRET not configured');
+    return res.status(500).json({ error: 'Webhook not configured' });
+  }
+  
+  if (!signature) {
+    logger.warn('[Webhook] Signature not provided');
+    return res.status(401).json({ error: 'Signature required' });
+  }
+  
+  // Verify signature with HMAC timing-safe comparison
+  const payload = JSON.stringify(req.body);
+  if (!verifyWebhookSignature(payload, signature, webhookSecret)) {
+    logger.warn('[Webhook] Invalid signature - possible forgery attempt');
+    return res.status(401).json({ error: 'Invalid signature' });
   }
 
   const event = req.body as WebhookEvent;

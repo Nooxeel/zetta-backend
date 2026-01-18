@@ -3,6 +3,7 @@ import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
 import { authenticate } from '../middleware/auth'
 import { messageLimiter } from '../middleware/rateLimiter'
+import { isAnyBlockBetweenUsers } from '../middleware/blockCheck'
 import { io } from '../index'
 
 const router = Router()
@@ -173,7 +174,11 @@ router.post('/conversations', authenticate, async (req: Request, res: Response) 
     })
   } catch (error) {
     logger.error('Create conversation error:', error)
-    res.status(500).json({ error: 'Failed to create conversation', details: (error as any).message })
+    // SECURITY: Don't expose error details in production
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? 'Failed to create conversation' 
+      : `Failed to create conversation: ${(error as any).message}`
+    res.status(500).json({ error: errorMessage })
   }
 })
 
@@ -195,6 +200,19 @@ router.get('/conversations/:conversationId/messages', authenticate, async (req: 
 
     if (conversation.participant1Id !== userId && conversation.participant2Id !== userId) {
       return res.status(403).json({ error: 'Not authorized to view this conversation' })
+    }
+
+    // SECURITY: Check if there's a block between participants
+    const otherParticipantId = conversation.participant1Id === userId 
+      ? conversation.participant2Id 
+      : conversation.participant1Id
+    
+    const isBlocked = await isAnyBlockBetweenUsers(userId, otherParticipantId)
+    if (isBlocked) {
+      return res.status(403).json({ 
+        error: 'This conversation is no longer available',
+        code: 'USER_BLOCKED'
+      })
     }
 
     // Get messages with cursor-based pagination
