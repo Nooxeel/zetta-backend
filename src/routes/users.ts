@@ -8,6 +8,50 @@ import { sanitizePagination } from '../middleware/rateLimiter';
 const router = Router();
 const logger = createLogger('Users');
 
+// GET /api/users/search - Buscar usuarios por username o displayName
+router.get('/search', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { q, limit = '10' } = req.query;
+    const userId = (req as any).user.userId;
+    
+    if (!q || typeof q !== 'string' || q.trim().length < 2) {
+      res.json({ users: [] });
+      return;
+    }
+    
+    const searchTerm = q.trim().toLowerCase();
+    const limitNum = Math.min(parseInt(limit as string) || 10, 20);
+    
+    const users = await prisma.user.findMany({
+      where: {
+        AND: [
+          { id: { not: userId } }, // Excluir al usuario actual
+          {
+            OR: [
+              { username: { contains: searchTerm, mode: 'insensitive' } },
+              { displayName: { contains: searchTerm, mode: 'insensitive' } }
+            ]
+          }
+        ]
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        isCreator: true
+      },
+      take: limitNum,
+      orderBy: { displayName: 'asc' }
+    });
+    
+    res.json({ users });
+  } catch (error) {
+    logger.error('Error al buscar usuarios:', error);
+    res.status(500).json({ error: 'Error al buscar usuarios' });
+  }
+});
+
 // GET /api/users/me - Obtener perfil del usuario actual
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
