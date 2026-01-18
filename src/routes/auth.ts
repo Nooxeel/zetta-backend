@@ -195,13 +195,7 @@ router.get('/me', async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        displayName: true,
-        avatar: true,
-        isCreator: true,
+      include: {
         creatorProfile: {
           include: {
             musicTracks: true,
@@ -214,6 +208,9 @@ router.get('/me', async (req: Request, res: Response) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' })
     }
+    
+    // Log fontFamily for debugging
+    console.log('[AUTH /me] creatorProfile.fontFamily:', user.creatorProfile?.fontFamily)
 
     res.json({
       id: user.id,
