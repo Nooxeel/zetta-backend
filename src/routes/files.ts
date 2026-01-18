@@ -71,13 +71,13 @@ async function hasAccessToCreator(userId: string | null, creatorId: string): Pro
 }
 
 /**
- * GET /files/:creatorId/*
+ * GET /files/:creatorId/*filePath
  * Serve files with access control
  */
-router.get('/:creatorId/*', async (req: Request, res: Response) => {
+router.get('/:creatorId/*filePath', async (req: Request, res: Response) => {
   try {
     const { creatorId } = req.params
-    const filePath = req.params[0] // Everything after creatorId
+    const filePath = req.params.filePath // Everything after creatorId
     
     if (!filePath) {
       return res.status(400).json({ error: 'File path required' })
