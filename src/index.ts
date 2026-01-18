@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import compression from 'compression'
+import cookieParser from 'cookie-parser'
 import path from 'path'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
@@ -135,6 +136,7 @@ app.use(helmet({
 
 app.use(express.json({ limit: '10mb' })) // Limit request body size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(cookieParser()) // Parse cookies for httpOnly JWT
 
 // Protected file serving with access control
 // Use /api/files/:creatorId/* for authenticated file access

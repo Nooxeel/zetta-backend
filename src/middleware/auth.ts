@@ -1,9 +1,11 @@
 /**
  * Middleware de autenticación compartido
+ * Supports both Bearer token (Authorization header) and httpOnly cookie
  */
 
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { JWT_COOKIE_NAME } from '../lib/cookies';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -18,6 +20,25 @@ export interface AuthRequest extends Request {
 }
 
 /**
+ * Extract token from request (header or cookie)
+ */
+function getTokenFromRequest(req: Request): string | null {
+  // 1. Try Authorization header first
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+  
+  // 2. Try httpOnly cookie
+  const cookieToken = req.cookies?.[JWT_COOKIE_NAME];
+  if (cookieToken) {
+    return cookieToken;
+  }
+  
+  return null;
+}
+
+/**
  * Middleware para verificar JWT y extraer userId e isCreator
  */
 export const authenticate = async (
@@ -26,14 +47,13 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getTokenFromRequest(req);
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       res.status(401).json({ error: 'Token no proporcionado' });
       return;
     }
 
-    const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator?: boolean };
     
     // Compatibilidad: establecer en múltiples propiedades para código existente
@@ -57,15 +77,13 @@ export const optionalAuthenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getTokenFromRequest(req);
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       // No hay token, continuar sin userId
       next();
       return;
     }
-
-    const token = authHeader.split(' ')[1];
     
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator?: boolean };

@@ -6,6 +6,7 @@ import { registerSchema, loginSchema, validateData } from '../lib/validators'
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
 import { createLogger } from '../lib/logger'
 import { applyReferralOnSignup } from '../services/referralService'
+import { setTokenCookie, clearTokenCookie } from '../lib/cookies'
 
 const router = Router()
 const logger = createLogger('Auth')
@@ -81,6 +82,9 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       { expiresIn: '7d' }
     )
 
+    // Set httpOnly cookie
+    setTokenCookie(res, token)
+
     res.status(201).json({
       message: 'User created successfully',
       user: {
@@ -90,7 +94,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
         displayName: user.displayName,
         isCreator: user.isCreator
       },
-      token
+      token // Also return token for backward compatibility
     })
   } catch (error) {
     logger.error('Register error:', error)
@@ -137,6 +141,9 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       { expiresIn: '7d' }
     )
 
+    // Set httpOnly cookie
+    setTokenCookie(res, token)
+
     res.json({
       user: {
         id: user.id,
@@ -147,7 +154,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         isCreator: user.isCreator,
         creatorProfile: user.creatorProfile
       },
-      token
+      token // Also return token for backward compatibility
     })
   } catch (error) {
     logger.error('Login error:', error)
@@ -201,6 +208,12 @@ router.get('/me', async (req: Request, res: Response) => {
     logger.error('Get me error:', error)
     res.status(401).json({ error: 'Invalid token' })
   }
+})
+
+// Logout - clear httpOnly cookie
+router.post('/logout', (req: Request, res: Response) => {
+  clearTokenCookie(res)
+  res.json({ message: 'Logged out successfully' })
 })
 
 export default router
