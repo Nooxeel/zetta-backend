@@ -40,6 +40,7 @@ import ageVerificationRoutes from './routes/age-verification'
 import referralsRoutes from './routes/referrals'
 import importRoutes from './routes/import'
 import paymentsRoutes from './routes/payments'
+import filesRoutes from './routes/files'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -114,8 +115,18 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' })) // Limit request body size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Serve static files (uploads)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+// Protected file serving with access control
+// Use /api/files/:creatorId/* for authenticated file access
+app.use('/api/files', filesRoutes)
+
+// Legacy static files route - only serves truly public files (avatars, covers)
+// For backward compatibility during migration
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders: (res, filePath) => {
+    // Add cache headers for static files
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+  }
+}))
 
 // Routes
 app.use('/api/auth', authRoutes)

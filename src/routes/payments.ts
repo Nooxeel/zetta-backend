@@ -15,8 +15,11 @@ import jwt from 'jsonwebtoken';
 
 const router = Router();
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-cambiar-en-produccion';
+// JWT Secret - MUST be set in environment
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL: JWT_SECRET environment variable is required');
+}
 
 // Frontend URLs
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';

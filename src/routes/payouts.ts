@@ -274,9 +274,18 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
  * En producción esto se llamaría desde un cron job
  */
 router.post('/admin/calculate-all', async (req: Request, res: Response) => {
-  // TODO: Agregar autenticación admin
-  const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== process.env.ADMIN_KEY && process.env.NODE_ENV !== 'development') {
+  const adminKey = req.headers['x-admin-key'] as string;
+  const expectedKey = process.env.ADMIN_KEY;
+  
+  // Timing-safe comparison to prevent timing attacks
+  const isAuthorized = process.env.NODE_ENV === 'development' || (
+    expectedKey && 
+    adminKey && 
+    adminKey.length === expectedKey.length &&
+    require('crypto').timingSafeEqual(Buffer.from(adminKey), Buffer.from(expectedKey))
+  );
+  
+  if (!isAuthorized) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
@@ -301,8 +310,18 @@ router.post('/admin/calculate-all', async (req: Request, res: Response) => {
  * Lista payouts que fallaron y están pendientes de reintento
  */
 router.get('/admin/pending-retry', async (req: Request, res: Response) => {
-  const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== process.env.ADMIN_KEY && process.env.NODE_ENV !== 'development') {
+  const adminKey = req.headers['x-admin-key'] as string;
+  const expectedKey = process.env.ADMIN_KEY;
+  
+  // Timing-safe comparison
+  const isAuthorized = process.env.NODE_ENV === 'development' || (
+    expectedKey && 
+    adminKey && 
+    adminKey.length === expectedKey.length &&
+    require('crypto').timingSafeEqual(Buffer.from(adminKey), Buffer.from(expectedKey))
+  );
+  
+  if (!isAuthorized) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
