@@ -281,6 +281,9 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       visibilitySettings
     } = req.body
 
+    console.log('[UPDATE PROFILE] Received fontFamily:', fontFamily)
+    console.log('[UPDATE PROFILE] Full body:', JSON.stringify(req.body, null, 2))
+
     // Get creator profile
     const creator = await prisma.creator.findUnique({
       where: { userId },
@@ -366,6 +369,9 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       fontFamily: sanitizedBody.fontFamily,
       visibilitySettings: sanitizedBody.visibilitySettings
     }
+
+    console.log('[UPDATE PROFILE] sanitizedBody.fontFamily:', sanitizedBody.fontFamily)
+    console.log('[UPDATE PROFILE] updateData to save:', JSON.stringify(updateData, null, 2))
 
     // Add coverImage if provided
     if (sanitizedBody.coverImage) {
