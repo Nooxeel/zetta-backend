@@ -6,12 +6,40 @@ import prisma from '../lib/prisma'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
 import { sanitizePost, sanitizeComment } from '../lib/sanitize'
 import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter, sanitizePagination } from '../middleware/rateLimiter'
-import { authenticate } from '../middleware/auth'
+import { authenticate, optionalAuthenticate } from '../middleware/auth'
 import { io } from '../index'
 import { createLogger } from '../lib/logger'
 
 const router = Router()
 const logger = createLogger('Posts')
+
+/**
+ * Check if user has access to subscriber-only content
+ */
+async function checkSubscriptionAccess(userId: string | null, creatorId: string, requiredTierId?: string | null): Promise<boolean> {
+  if (!userId) return false
+  
+  // Check if user is the creator
+  const creator = await prisma.creator.findUnique({ where: { id: creatorId } })
+  if (creator?.userId === userId) return true
+  
+  // Check active subscription
+  const subscription = await prisma.subscription.findUnique({
+    where: {
+      userId_creatorId: { userId, creatorId }
+    }
+  })
+  
+  if (!subscription || subscription.status !== 'active') return false
+  
+  // If specific tier required, check tier matches
+  if (requiredTierId && subscription.tierId !== requiredTierId) {
+    // TODO: Check tier hierarchy
+    return false
+  }
+  
+  return true
+}
 
 /**
  * Safely parse JSON with fallback
@@ -138,8 +166,10 @@ router.get('/my-posts', authenticate, async (req: Request, res: Response) => {
 })
 
 // GET /api/posts - Obtener posts de un creador con paginación
-router.get('/', async (req: Request, res: Response) => {
+// SECURITY: Filters subscriber-only content based on authentication
+router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).userId || null
     const { creatorId, visibility, cursor, limit = '10' } = req.query
 
     const where: any = {}
@@ -148,7 +178,9 @@ router.get('/', async (req: Request, res: Response) => {
       where.creatorId = creatorId as string
     }
 
-    if (visibility) {
+    // SECURITY: Don't allow directly requesting subscriber-only content
+    // Let the filter below handle access control
+    if (visibility && visibility !== 'subscriber') {
       where.visibility = visibility as string
     }
 
@@ -178,11 +210,32 @@ router.get('/', async (req: Request, res: Response) => {
     const postsToReturn = hasMore ? posts.slice(0, take) : posts
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null
 
-    // Parse content JSON
-    const formatted = postsToReturn.map(post => ({
-      ...post,
-      content: safeJsonParse(post.content, [])
-    }))
+    // SECURITY: Filter posts based on subscription access
+    const formattedPromises = postsToReturn.map(async (post) => {
+      const isSubscriberOnly = post.visibility === 'subscriber' || post.requiredTierId
+      
+      if (isSubscriberOnly) {
+        const hasAccess = await checkSubscriptionAccess(userId, post.creatorId, post.requiredTierId)
+        
+        if (!hasAccess) {
+          // Return locked version of the post
+          return {
+            ...post,
+            content: [], // Hide actual content
+            isLocked: true,
+            lockReason: post.requiredTierId ? 'tier_required' : 'subscription_required'
+          }
+        }
+      }
+      
+      return {
+        ...post,
+        content: safeJsonParse(post.content, []),
+        isLocked: false
+      }
+    })
+
+    const formatted = await Promise.all(formattedPromises)
 
     res.json({
       posts: formatted,

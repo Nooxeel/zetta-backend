@@ -363,7 +363,18 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
     // })
     // ==========================================
 
-    // POR AHORA: Aprobación automática para desarrollo/testing
+    // SECURITY: Block direct subscription creation in production
+    // Use /api/payments/webpay/create for real payments
+    if (process.env.NODE_ENV === 'production') {
+      res.status(400).json({ 
+        error: 'Pago requerido',
+        message: 'Por favor usa el sistema de pagos para suscribirte',
+        paymentUrl: '/api/payments/webpay/create'
+      })
+      return
+    }
+
+    // DEV ONLY: Aprobación automática para desarrollo/testing
     // Calcular endDate basado en durationDays del tier
     const endDate = new Date(Date.now() + tier.durationDays * 24 * 60 * 60 * 1000)
     

@@ -4,9 +4,11 @@ import helmet from 'helmet'
 import compression from 'compression'
 import path from 'path'
 import dotenv from 'dotenv'
+import jwt from 'jsonwebtoken'
 import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import { createLogger } from './lib/logger'
+import prisma from './lib/prisma'
 
 // Load environment variables
 dotenv.config()
@@ -48,6 +50,25 @@ import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
 const app = express()
 const PORT = process.env.PORT || 3001
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+
+// SECURITY: Validate JWT_SECRET strength at startup
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  logger.error('CRITICAL: JWT_SECRET is not configured!')
+  process.exit(1)
+}
+
+// In production, enforce strong secret
+if (process.env.NODE_ENV === 'production') {
+  if (JWT_SECRET.length < 32) {
+    logger.error('CRITICAL: JWT_SECRET must be at least 32 characters in production!')
+    process.exit(1)
+  }
+  if (JWT_SECRET.includes('change-this') || JWT_SECRET.includes('example') || JWT_SECRET.includes('secret-2024')) {
+    logger.error('CRITICAL: JWT_SECRET appears to be a placeholder value!')
+    process.exit(1)
+  }
+}
 
 // Trust Railway proxy
 app.set('trust proxy', 1)
@@ -205,20 +226,76 @@ const io = new SocketIOServer(httpServer, {
 // WebSocket logger
 const wsLogger = createLogger('WebSocket')
 
+// SECURITY: WebSocket authentication middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1]
+  
+  if (!token) {
+    wsLogger.warn(`Unauthenticated WebSocket connection attempt: ${socket.id}`)
+    return next(new Error('Authentication required'))
+  }
+  
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET
+    if (!JWT_SECRET) {
+      return next(new Error('Server configuration error'))
+    }
+    
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
+    socket.data.userId = decoded.userId
+    socket.data.authenticated = true
+    next()
+  } catch (err) {
+    wsLogger.warn(`Invalid JWT on WebSocket connection: ${socket.id}`)
+    return next(new Error('Invalid or expired token'))
+  }
+})
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
-  wsLogger.debug(`Client connected: ${socket.id}`)
+  const authenticatedUserId = socket.data.userId
+  wsLogger.debug(`Authenticated client connected: ${socket.id} (user: ${authenticatedUserId})`)
 
-  // Join user-specific room
+  // Auto-join user to their own room on connection
+  socket.join(`user:${authenticatedUserId}`)
+  wsLogger.debug(`User ${authenticatedUserId} auto-joined their room`)
+
+  // SECURITY: Validate user can only join their own room
   socket.on('join:user', (userId: string) => {
+    if (userId !== authenticatedUserId) {
+      wsLogger.warn(`User ${authenticatedUserId} attempted to join room for user ${userId}`)
+      socket.emit('error', { message: 'Cannot join another user\'s room' })
+      return
+    }
     socket.join(`user:${userId}`)
     wsLogger.debug(`User ${userId} joined their room (socket: ${socket.id})`)
   })
 
-  // Join conversation room
-  socket.on('join:conversation', (conversationId: string) => {
-    socket.join(`conversation:${conversationId}`)
-    wsLogger.debug(`Socket ${socket.id} joined conversation ${conversationId}`)
+  // SECURITY: Validate user is participant in conversation before joining
+  socket.on('join:conversation', async (conversationId: string) => {
+    try {
+      const conversation = await prisma.conversation.findFirst({
+        where: {
+          id: conversationId,
+          OR: [
+            { participant1Id: authenticatedUserId },
+            { participant2Id: authenticatedUserId }
+          ]
+        }
+      })
+      
+      if (!conversation) {
+        wsLogger.warn(`User ${authenticatedUserId} attempted to join unauthorized conversation ${conversationId}`)
+        socket.emit('error', { message: 'Not authorized to join this conversation' })
+        return
+      }
+      
+      socket.join(`conversation:${conversationId}`)
+      wsLogger.debug(`Socket ${socket.id} joined conversation ${conversationId}`)
+    } catch (error) {
+      wsLogger.error('Error validating conversation access:', error)
+      socket.emit('error', { message: 'Failed to join conversation' })
+    }
   })
 
   // Leave conversation room

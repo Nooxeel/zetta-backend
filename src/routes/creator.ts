@@ -202,8 +202,8 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
             id: true,
             username: true,
             displayName: true,
-            avatar: true,
-            email: true
+            avatar: true
+            // SECURITY: email removed - should not be exposed to other users
           }
         }
       }

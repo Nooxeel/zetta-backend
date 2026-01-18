@@ -26,18 +26,12 @@ const logger = createLogger('Admin');
 const adminAuth = (req: Request, res: Response, next: Function) => {
   const adminKey = req.headers['x-admin-key'];
   const expectedKey = process.env.ADMIN_KEY;
-  const nodeEnv = process.env.NODE_ENV;
   
-  // En desarrollo, permitir sin key SOLO si no hay ADMIN_KEY configurado
-  if (nodeEnv === 'development' && !expectedKey) {
-    logger.warn('⚠️ [Admin] ADMIN_KEY no configurado - acceso permitido en desarrollo');
-    return next();
-  }
-  
-  // En producción, SIEMPRE requerir ADMIN_KEY
+  // SECURITY: ALWAYS require ADMIN_KEY in all environments
+  // Removed development bypass - admin access should always be protected
   if (!expectedKey) {
-    logger.error('🚫 [Admin] CRITICAL: ADMIN_KEY no configurado en producción');
-    return res.status(500).json({ error: 'Configuración de admin incompleta' });
+    logger.error('🚫 [Admin] CRITICAL: ADMIN_KEY not configured');
+    return res.status(500).json({ error: 'Admin configuration incomplete' });
   }
   
   if (!adminKey) {
