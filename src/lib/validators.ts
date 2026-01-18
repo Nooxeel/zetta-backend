@@ -44,7 +44,8 @@ export const registerSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
   displayName: displayNameSchema,
-  isCreator: z.boolean().optional().default(false)
+  isCreator: z.boolean().optional().default(false),
+  referralCode: z.string().max(20).optional() // Optional referral code from ?ref= URL
 })
 
 export const loginSchema = z.object({

@@ -5,6 +5,7 @@ import prisma from '../lib/prisma'
 import { registerSchema, loginSchema, validateData } from '../lib/validators'
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
 import { createLogger } from '../lib/logger'
+import { applyReferralOnSignup } from '../services/referralService'
 
 const router = Router()
 const logger = createLogger('Auth')
@@ -27,7 +28,7 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       })
     }
     
-    const { email, username, password, displayName, isCreator } = validation.data
+    const { email, username, password, displayName, isCreator, referralCode } = validation.data
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -61,6 +62,16 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
           userId: user.id
         }
       })
+    }
+
+    // Apply referral code if provided
+    if (referralCode) {
+      const referralResult = await applyReferralOnSignup(prisma, user.id, referralCode)
+      if (referralResult.success) {
+        logger.info(`Referral applied for user ${user.id} from code ${referralCode}`)
+      } else {
+        logger.warn(`Failed to apply referral: ${referralResult.error}`)
+      }
     }
 
     // Generate JWT

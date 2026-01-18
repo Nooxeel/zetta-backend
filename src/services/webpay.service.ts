@@ -11,6 +11,7 @@ import { WebpayPlus, Options, IntegrationApiKeys, IntegrationCommerceCodes, Envi
 import prisma from '../lib/prisma';
 import { WebpayPaymentType, WebpayStatus, ProductType, TransactionStatus } from '@prisma/client';
 import { createTransactionLedgerEntries, LEDGER_CODES } from './ledgerService';
+import { processReferralCommission } from './referralService';
 
 // Default fee schedule ID (10% platform fee)
 const DEFAULT_FEE_SCHEDULE_ID = 'default-fee-schedule';
@@ -521,6 +522,22 @@ class WebpayService {
         // Log but don't fail if ledger accounts aren't set up
         console.warn('[Webpay] Could not create ledger entries:', ledgerError);
       }
+
+      // 4. Process referral commission if applicable
+      try {
+        const referralResult = await processReferralCommission(
+          tx,
+          userId,
+          platformFeeAmount,
+          'subscription',
+          transaction.id
+        );
+        if (referralResult.processed) {
+          console.log(`[Webpay] Referral commission: ${referralResult.commissionAmount} CLP to ${referralResult.referrerId}`);
+        }
+      } catch (referralError) {
+        console.warn('[Webpay] Could not process referral commission:', referralError);
+      }
     });
 
     console.log(`[Webpay] Subscription activated for user ${userId} to creator ${creatorId}`);
@@ -611,6 +628,22 @@ class WebpayService {
         );
       } catch (ledgerError) {
         console.warn('[Webpay] Could not create ledger entries for donation:', ledgerError);
+      }
+
+      // 4. Process referral commission if applicable
+      try {
+        const referralResult = await processReferralCommission(
+          tx,
+          fromUserId,
+          platformFeeAmount,
+          'donation',
+          transaction.id
+        );
+        if (referralResult.processed) {
+          console.log(`[Webpay] Referral commission for donation: ${referralResult.commissionAmount} CLP`);
+        }
+      } catch (referralError) {
+        console.warn('[Webpay] Could not process referral commission for donation:', referralError);
       }
     });
 
