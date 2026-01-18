@@ -629,7 +629,7 @@ router.get('/like-status/batch', authenticate, async (req: Request, res: Respons
 router.get('/:id/comments', async (req: Request, res: Response) => {
   try {
     const { id: postId } = req.params
-    const { limit = 50, offset = 0 } = req.query
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 100, 50)
 
     const comments = await prisma.postComment.findMany({
       where: {
@@ -649,8 +649,8 @@ router.get('/:id/comments', async (req: Request, res: Response) => {
       orderBy: {
         createdAt: 'desc'
       },
-      take: Number(limit),
-      skip: Number(offset)
+      take,
+      skip
     })
 
     const total = await prisma.postComment.count({

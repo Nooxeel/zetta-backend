@@ -206,18 +206,19 @@ export const paymentLimiter = rateLimit({
 /**
  * Utility: Validate and sanitize pagination parameters
  * Returns safe values with bounds checking
+ * Uses Prisma naming convention: take (limit) and skip (offset)
  */
 export function sanitizePagination(
   limit: string | undefined,
   offset: string | undefined,
   maxLimit: number = 50,
   defaultLimit: number = 10
-): { limit: number; offset: number } {
+): { take: number; skip: number } {
   const parsedLimit = parseInt(limit || '', 10)
   const parsedOffset = parseInt(offset || '', 10)
   
   return {
-    limit: Math.min(Math.max(1, isNaN(parsedLimit) ? defaultLimit : parsedLimit), maxLimit),
-    offset: Math.max(0, isNaN(parsedOffset) ? 0 : parsedOffset)
+    take: Math.min(Math.max(1, isNaN(parsedLimit) ? defaultLimit : parsedLimit), maxLimit),
+    skip: Math.max(0, isNaN(parsedOffset) ? 0 : parsedOffset)
   }
 }

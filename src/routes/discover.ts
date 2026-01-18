@@ -8,8 +8,8 @@ const router = Router()
 // Discover creators by interests (public or authenticated)
 router.get('/creators', async (req: Request, res: Response) => {
   try {
-    const { interestIds, limit: rawLimit, offset: rawOffset } = req.query
-    const { limit, offset } = sanitizePagination(rawLimit as string, rawOffset as string, 50, 20)
+    const { interestIds } = req.query
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20)
 
     // Parse interestIds if provided
     const interestIdsArray = interestIds
@@ -47,8 +47,8 @@ router.get('/creators', async (req: Request, res: Response) => {
           { isVerified: 'desc' },
           { totalViews: 'desc' }
         ],
-        take: Number(limit),
-        skip: Number(offset)
+        take,
+        skip
       })
 
       return res.json(creators)
@@ -87,8 +87,8 @@ router.get('/creators', async (req: Request, res: Response) => {
           }
         }
       },
-      take: limit,
-      skip: offset
+      take,
+      skip
     })
 
     // Calculate relevance score for each creator
@@ -125,7 +125,7 @@ router.get('/creators', async (req: Request, res: Response) => {
 router.get('/recommended', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as AuthRequest).userId!
-    const { limit = 20, offset = 0 } = req.query
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20)
 
     // Get user's interests
     const userInterests = await prisma.userInterest.findMany({
@@ -167,8 +167,8 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
           { isVerified: 'desc' },
           { totalViews: 'desc' }
         ],
-        take: Number(limit),
-        skip: Number(offset)
+        take,
+        skip
       })
 
       return res.json(creators)
@@ -217,7 +217,7 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
           }
         }
       },
-      take: Number(limit) * 2 // Get more for better sorting
+      take: take * 2 // Get more for better sorting
     })
 
     // Calculate relevance score
@@ -241,10 +241,7 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
     })
 
     // Apply pagination after sorting
-    const paginatedResults = creatorsWithScore.slice(
-      Number(offset),
-      Number(offset) + Number(limit)
-    )
+    const paginatedResults = creatorsWithScore.slice(skip, skip + take)
 
     res.json(paginatedResults)
   } catch (error) {
@@ -256,7 +253,8 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
 // Search creators by interests AND keywords
 router.get('/search', async (req: Request, res: Response) => {
   try {
-    const { query, interestIds, limit = 20, offset = 0 } = req.query
+    const { query, interestIds } = req.query
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20)
 
     const interestIdsArray = interestIds
       ? (interestIds as string).split(',').filter(Boolean)
@@ -313,8 +311,8 @@ router.get('/search', async (req: Request, res: Response) => {
         { isVerified: 'desc' },
         { totalViews: 'desc' }
       ],
-      take: Number(limit),
-      skip: Number(offset)
+      take,
+      skip
     })
 
     res.json(creators)

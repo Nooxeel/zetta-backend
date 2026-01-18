@@ -3,6 +3,7 @@ import { createLogger } from '../lib/logger'
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
+import { sanitizePagination } from '../middleware/rateLimiter';
 
 const router = Router();
 const logger = createLogger('Users');
@@ -197,7 +198,7 @@ router.get('/subscriptions/check/:creatorId', authenticate, async (req: Request,
 router.get('/me/payments', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user.userId;
-    const { limit = 20, offset = 0 } = req.query;
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20);
     
     // Obtener donaciones enviadas
     const donations = await prisma.donation.findMany({
@@ -216,8 +217,8 @@ router.get('/me/payments', authenticate, async (req: Request, res: Response): Pr
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: Number(offset)
+      take,
+      skip
     });
     
     // Obtener historial de suscripciones (todas, no solo activas)
@@ -238,8 +239,8 @@ router.get('/me/payments', authenticate, async (req: Request, res: Response): Pr
         tier: true
       },
       orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: Number(offset)
+      take,
+      skip
     });
     
     // Formatear donaciones

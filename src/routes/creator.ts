@@ -5,6 +5,7 @@ import { authenticate, optionalAuthenticate } from '../middleware/auth'
 import { creatorCache } from '../lib/cache'
 import { createLogger } from '../lib/logger'
 import { isUserBlockedByUsername } from '../middleware/blockCheck'
+import { sanitizePagination } from '../middleware/rateLimiter'
 
 const router = Router()
 const logger = createLogger('Creator')
@@ -149,7 +150,7 @@ router.get('/username/:username', optionalAuthenticate, async (req: Request, res
 router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId
-    const { limit = 50, offset = 0 } = req.query
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50)
 
     const creator = await prisma.creator.findUnique({
       where: { userId }
@@ -161,8 +162,8 @@ router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
 
     const logs = await prisma.profileAuditLog.findMany({
       where: { creatorId: creator.id },
-      take: Number(limit),
-      skip: Number(offset),
+      take,
+      skip,
       orderBy: { createdAt: 'desc' }
     })
 
@@ -173,8 +174,8 @@ router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
     res.json({
       logs,
       total,
-      limit: Number(limit),
-      offset: Number(offset)
+      limit: take,
+      offset: skip
     })
   } catch (error) {
     logger.error('Get audit logs error:', error)
@@ -484,11 +485,11 @@ router.delete('/music/:trackId', authenticate, async (req: Request, res: Respons
 // Get all creators (for explore page)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { limit = 20, offset = 0 } = req.query
+    const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20)
 
     const creators = await prisma.creator.findMany({
-      take: Number(limit),
-      skip: Number(offset),
+      take,
+      skip,
       include: {
         user: {
           select: {
