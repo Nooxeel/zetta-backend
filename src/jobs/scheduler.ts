@@ -6,12 +6,14 @@
  * 2. Payout Calculation - semanal (domingos 2am)
  * 3. Outbox Cleanup - diario (3am, limpia eventos >30 días)
  * 4. Payout Retry - cada hora (reintenta payouts fallidos)
+ * 5. Subscription Renewal - diario (6am, procesa renovaciones y expiraciones)
  * 
  * Configuración via env:
  * - ENABLE_JOBS: 'true' | 'false' (default: true)
  * - OUTBOX_CRON: expresión cron (default: '* * * * *' = cada minuto)
  * - PAYOUT_CRON: expresión cron (default: '0 2 * * 0' = domingos 2am)
  * - CLEANUP_CRON: expresión cron (default: '0 3 * * *' = diario 3am)
+ * - RENEWAL_CRON: expresión cron (default: '0 6 * * *' = diario 6am)
  */
 
 import cron, { ScheduledTask } from 'node-cron';
@@ -22,6 +24,7 @@ import {
   type PublisherConfig 
 } from '../services/outboxPublisher';
 import { calculateAllPayouts, getPayoutsPendingRetry } from '../services/payoutService';
+import { processSubscriptionRenewals } from '../services/subscriptionRenewalService';
 import prisma from '../lib/prisma';
 
 // Configuración
@@ -30,6 +33,7 @@ const OUTBOX_CRON = process.env.OUTBOX_CRON || '* * * * *'; // Cada minuto
 const PAYOUT_CRON = process.env.PAYOUT_CRON || '0 2 * * 0'; // Domingos 2am
 const CLEANUP_CRON = process.env.CLEANUP_CRON || '0 3 * * *'; // Diario 3am
 const RETRY_CRON = process.env.RETRY_CRON || '0 * * * *'; // Cada hora
+const RENEWAL_CRON = process.env.RENEWAL_CRON || '0 6 * * *'; // Diario 6am
 
 // Publisher config
 const publisherConfig: PublisherConfig = {
@@ -166,6 +170,51 @@ function payoutRetryJob() {
 }
 
 /**
+ * Job 5: Procesar renovaciones y expiraciones de suscripciones
+ */
+function subscriptionRenewalJob() {
+  jobs.renewal = cron.schedule(RENEWAL_CRON, async () => {
+    console.log('[Job:Renewal] Procesando renovaciones de suscripciones...');
+    
+    try {
+      const result = await processSubscriptionRenewals();
+      
+      console.log(
+        `[Job:Renewal] Completado - ` +
+        `Expiradas: ${result.expired}, ` +
+        `Renovadas: ${result.renewed}, ` +
+        `Recordatorios: ${result.reminded}, ` +
+        `Errores: ${result.errors}`
+      );
+      
+      // Crear registro en outbox para auditoría
+      await prisma.outboxEvent.create({
+        data: {
+          aggregateType: 'System',
+          aggregateId: 'subscription-renewal-job',
+          eventType: 'SubscriptionRenewalJobCompleted',
+          payload: {
+            eventId: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            eventType: 'SubscriptionRenewalJobCompleted',
+            occurredAt: new Date().toISOString(),
+            result: {
+              expired: result.expired,
+              renewed: result.renewed,
+              reminded: result.reminded,
+              errors: result.errors
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('[Job:Renewal] Error:', error);
+    }
+  });
+  
+  console.log(`✅ Job 'subscriptionRenewal' iniciado: ${RENEWAL_CRON}`);
+}
+
+/**
  * Inicia todos los jobs
  */
 export function startScheduler(): void {
@@ -181,6 +230,7 @@ export function startScheduler(): void {
   payoutCalculationJob();
   outboxCleanupJob();
   payoutRetryJob();
+  subscriptionRenewalJob();
   
   console.log('');
 }
@@ -225,6 +275,11 @@ export async function runJobManually(jobName: string): Promise<void> {
       console.log(`[Manual] Retry: ${pending.length} payouts pendientes`);
       break;
       
+    case 'renewal':
+      const renewalResult = await processSubscriptionRenewals();
+      console.log(`[Manual] Renewal result:`, renewalResult);
+      break;
+      
     default:
       throw new Error(`Job desconocido: ${jobName}`);
   }
@@ -247,7 +302,8 @@ export function getSchedulerStatus(): {
       { name: 'outboxPublisher', cron: OUTBOX_CRON, running: !!jobs.outbox },
       { name: 'payoutCalculation', cron: PAYOUT_CRON, running: !!jobs.payout },
       { name: 'outboxCleanup', cron: CLEANUP_CRON, running: !!jobs.cleanup },
-      { name: 'payoutRetry', cron: RETRY_CRON, running: !!jobs.retry }
+      { name: 'payoutRetry', cron: RETRY_CRON, running: !!jobs.retry },
+      { name: 'subscriptionRenewal', cron: RENEWAL_CRON, running: !!jobs.renewal }
     ]
   };
 }

@@ -59,6 +59,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   // Email verification tokens
   emailVerificationTokens EmailVerificationToken[]
+  // Saved payment cards (Oneclick)
+  savedCards         SavedCard[]
 }
 
 // Password Reset Token
@@ -87,6 +89,27 @@ model EmailVerificationToken {
 
   @@index([token])
   @@index([userId])
+}
+
+// Saved Card for Oneclick Recurring Payments
+// Stores the tbkUser token from Transbank Oneclick inscription
+model SavedCard {
+  id              String    @id @default(uuid())
+  userId          String
+  tbkUser         String    @unique  // Transbank user token for charging
+  cardType        String               // VISA, MASTERCARD, AMEX, etc.
+  cardLastFour    String               // Last 4 digits for display (e.g., "1234")
+  cardBrand       String?              // Débito/Crédito
+  isDefault       Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastUsedAt      DateTime?
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+  @@index([tbkUser])
 }
 
 model Creator {
@@ -197,19 +220,20 @@ model SubscriptionTier {
 }
 
 model Subscription {
-  id        String           @id @default(uuid())
-  userId    String
-  creatorId String
-  tierId    String
-  status    String           @default("active")
-  startDate DateTime         @default(now())
-  endDate   DateTime?
-  autoRenew Boolean          @default(true)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  creator   Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  tier      SubscriptionTier @relation(fields: [tierId], references: [id])
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String           @id @default(uuid())
+  userId       String
+  creatorId    String
+  tierId       String
+  status       String           @default("active")
+  startDate    DateTime         @default(now())
+  endDate      DateTime?
+  autoRenew    Boolean          @default(true)
+  savedCardId  String?          // Card used for auto-renewal (Oneclick)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  creator      Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  tier         SubscriptionTier @relation(fields: [tierId], references: [id])
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, creatorId])
   @@index([userId, status])
