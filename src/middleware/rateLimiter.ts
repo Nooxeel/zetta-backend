@@ -185,3 +185,39 @@ export const likeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 })
+
+/**
+ * Rate limiter para pagos
+ * Muy restrictivo para prevenir abuso financiero
+ */
+export const paymentLimiter = rateLimit({
+  ...commonOptions,
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 10, // 10 intentos de pago por hora
+  message: { 
+    error: 'Demasiados intentos de pago. Por favor, espera un momento.',
+    retryAfter: 60 * 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: createKeyGenerator('payment:')
+})
+
+/**
+ * Utility: Validate and sanitize pagination parameters
+ * Returns safe values with bounds checking
+ */
+export function sanitizePagination(
+  limit: string | undefined,
+  offset: string | undefined,
+  maxLimit: number = 50,
+  defaultLimit: number = 10
+): { limit: number; offset: number } {
+  const parsedLimit = parseInt(limit || '', 10)
+  const parsedOffset = parseInt(offset || '', 10)
+  
+  return {
+    limit: Math.min(Math.max(1, isNaN(parsedLimit) ? defaultLimit : parsedLimit), maxLimit),
+    offset: Math.max(0, isNaN(parsedOffset) ? 0 : parsedOffset)
+  }
+}

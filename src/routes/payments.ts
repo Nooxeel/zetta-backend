@@ -12,6 +12,7 @@ import { Router, Request, Response } from 'express';
 import { webpayService } from '../services/webpay.service';
 import prisma from '../lib/prisma';
 import jwt from 'jsonwebtoken';
+import { paymentLimiter, sanitizePagination } from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ const authMiddleware = async (req: AuthRequest, res: Response, next: Function) =
  * POST /api/payments/webpay/create
  * Create a new payment and get redirect URL
  */
-router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/create', paymentLimiter, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { amount, paymentType, subscriptionTierId, creatorId, donationMessage } = req.body;

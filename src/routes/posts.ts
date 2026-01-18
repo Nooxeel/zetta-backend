@@ -5,13 +5,26 @@ import fs from 'fs'
 import prisma from '../lib/prisma'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
 import { sanitizePost, sanitizeComment } from '../lib/sanitize'
-import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter } from '../middleware/rateLimiter'
+import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter, sanitizePagination } from '../middleware/rateLimiter'
 import { authenticate } from '../middleware/auth'
 import { io } from '../index'
 import { createLogger } from '../lib/logger'
 
 const router = Router()
 const logger = createLogger('Posts')
+
+/**
+ * Safely parse JSON with fallback
+ * Prevents crashes from corrupted data
+ */
+function safeJsonParse(content: string, fallback: any = null): any {
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    logger.warn('Failed to parse JSON content:', { content: content?.substring(0, 100) })
+    return fallback
+  }
+}
 
 // SECURITY: Validate file types by magic bytes
 const validateVideoMagicBytes = (buffer: Buffer): boolean => {
@@ -114,7 +127,7 @@ router.get('/my-posts', authenticate, async (req: Request, res: Response) => {
     // Parse content JSON
     const formatted = posts.map(post => ({
       ...post,
-      content: JSON.parse(post.content)
+      content: safeJsonParse(post.content, [])
     }))
 
     res.json(formatted)
@@ -168,7 +181,7 @@ router.get('/', async (req: Request, res: Response) => {
     // Parse content JSON
     const formatted = postsToReturn.map(post => ({
       ...post,
-      content: JSON.parse(post.content)
+      content: safeJsonParse(post.content, [])
     }))
 
     res.json({
@@ -216,7 +229,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     res.json({
       ...post,
-      content: JSON.parse(post.content)
+      content: safeJsonParse(post.content, [])
     })
   } catch (error) {
     logger.error('Get post error:', error)
@@ -277,7 +290,7 @@ router.post('/', createPostLimiter, authenticate, async (req: Request, res: Resp
 
     res.json({
       ...post,
-      content: JSON.parse(post.content)
+      content: safeJsonParse(post.content, [])
     })
   } catch (error) {
     logger.error('Create post error:', error)
@@ -391,7 +404,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
 
     res.json({
       ...updated,
-      content: JSON.parse(updated.content)
+      content: safeJsonParse(updated.content, [])
     })
   } catch (error) {
     logger.error('Update post error:', error)
@@ -422,7 +435,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
     }
 
     // Eliminar archivos asociados
-    const content = JSON.parse(post.content)
+    const content = safeJsonParse(post.content, [])
     for (const item of content) {
       if (item.type === 'video' && item.url.startsWith('/uploads/')) {
         const filePath = path.join(__dirname, '../..', item.url)

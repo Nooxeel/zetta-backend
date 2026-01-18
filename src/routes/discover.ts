@@ -1,13 +1,15 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { authenticate, AuthRequest } from '../middleware/auth'
+import { sanitizePagination } from '../middleware/rateLimiter'
 
 const router = Router()
 
 // Discover creators by interests (public or authenticated)
 router.get('/creators', async (req: Request, res: Response) => {
   try {
-    const { interestIds, limit = 20, offset = 0 } = req.query
+    const { interestIds, limit: rawLimit, offset: rawOffset } = req.query
+    const { limit, offset } = sanitizePagination(rawLimit as string, rawOffset as string, 50, 20)
 
     // Parse interestIds if provided
     const interestIdsArray = interestIds
@@ -85,8 +87,8 @@ router.get('/creators', async (req: Request, res: Response) => {
           }
         }
       },
-      take: Number(limit),
-      skip: Number(offset)
+      take: limit,
+      skip: offset
     })
 
     // Calculate relevance score for each creator
