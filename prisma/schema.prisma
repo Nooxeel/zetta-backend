@@ -52,6 +52,41 @@ model User {
   referralCode       String?       @unique // Unique code for this user to share
   referredBy         Referral?     @relation("ReferredUser")
   referrals          Referral[]    @relation("ReferrerUser")
+  // Email verification
+  emailVerified      Boolean       @default(false)
+  emailVerifiedAt    DateTime?
+  // Password reset tokens
+  passwordResetTokens PasswordResetToken[]
+  // Email verification tokens
+  emailVerificationTokens EmailVerificationToken[]
+}
+
+// Password Reset Token
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+// Email Verification Token
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
 }
 
 model Creator {

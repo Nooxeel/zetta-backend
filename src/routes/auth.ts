@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import prisma from '../lib/prisma'
 import { registerSchema, loginSchema, validateData } from '../lib/validators'
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
 import { createLogger } from '../lib/logger'
 import { applyReferralOnSignup } from '../services/referralService'
 import { setTokenCookie, clearTokenCookie } from '../lib/cookies'
+import { sendPasswordResetEmail, sendVerificationEmail, sendWelcomeEmail, isEmailConfigured } from '../services/emailService'
 
 const router = Router()
 const logger = createLogger('Auth')
@@ -73,6 +75,24 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       } else {
         logger.warn(`Failed to apply referral: ${referralResult.error}`)
       }
+    }
+
+    // Send verification email if email service is configured
+    if (isEmailConfigured()) {
+      const verificationToken = crypto.randomBytes(32).toString('hex')
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+      await prisma.emailVerificationToken.create({
+        data: {
+          token: verificationToken,
+          userId: user.id,
+          expiresAt
+        }
+      })
+
+      // Send async - don't block registration
+      sendVerificationEmail(user.email, verificationToken, user.username)
+        .catch(err => logger.error('Failed to send verification email:', err))
     }
 
     // Generate JWT
@@ -214,6 +234,233 @@ router.get('/me', async (req: Request, res: Response) => {
 router.post('/logout', (req: Request, res: Response) => {
   clearTokenCookie(res)
   res.json({ message: 'Logged out successfully' })
+})
+
+// ==================== PASSWORD RESET ====================
+
+// Request password reset
+router.post('/forgot-password', authLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email es requerido' })
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    })
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      logger.info(`Password reset requested for non-existent email: ${email}`)
+      return res.json({ message: 'Si el email existe, recibirás un enlace para restablecer tu contraseña.' })
+    }
+
+    // Check if email service is configured
+    if (!isEmailConfigured()) {
+      logger.error('Email service not configured - cannot send password reset')
+      return res.status(503).json({ error: 'Servicio de email no disponible. Contacta soporte.' })
+    }
+
+    // Delete any existing tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id }
+    })
+
+    // Generate secure token
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+    // Save token
+    await prisma.passwordResetToken.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt
+      }
+    })
+
+    // Send email
+    const result = await sendPasswordResetEmail(user.email, token, user.username)
+    
+    if (!result.success) {
+      logger.error(`Failed to send password reset email: ${result.error}`)
+      return res.status(500).json({ error: 'Error al enviar el email. Intenta nuevamente.' })
+    }
+
+    res.json({ message: 'Si el email existe, recibirás un enlace para restablecer tu contraseña.' })
+  } catch (error) {
+    logger.error('Forgot password error:', error)
+    res.status(500).json({ error: 'Error al procesar la solicitud' })
+  }
+})
+
+// Reset password with token
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token y contraseña son requeridos' })
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' })
+    }
+
+    // Find valid token
+    const resetToken = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: { user: true }
+    })
+
+    if (!resetToken) {
+      return res.status(400).json({ error: 'Token inválido o expirado' })
+    }
+
+    if (resetToken.usedAt) {
+      return res.status(400).json({ error: 'Este enlace ya fue utilizado' })
+    }
+
+    if (resetToken.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'El enlace ha expirado. Solicita uno nuevo.' })
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Update password and mark token as used
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword }
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() }
+      })
+    ])
+
+    logger.info(`Password reset successful for user ${resetToken.userId}`)
+    res.json({ message: 'Contraseña actualizada exitosamente. Ya puedes iniciar sesión.' })
+  } catch (error) {
+    logger.error('Reset password error:', error)
+    res.status(500).json({ error: 'Error al restablecer la contraseña' })
+  }
+})
+
+// ==================== EMAIL VERIFICATION ====================
+
+// Resend verification email
+router.post('/resend-verification', authLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email es requerido' })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    })
+
+    if (!user) {
+      // Don't reveal if user exists
+      return res.json({ message: 'Si el email existe y no está verificado, recibirás un enlace.' })
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ error: 'Este email ya está verificado' })
+    }
+
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ error: 'Servicio de email no disponible' })
+    }
+
+    // Delete existing tokens
+    await prisma.emailVerificationToken.deleteMany({
+      where: { userId: user.id }
+    })
+
+    // Generate new token
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt
+      }
+    })
+
+    await sendVerificationEmail(user.email, token, user.username)
+
+    res.json({ message: 'Si el email existe y no está verificado, recibirás un enlace.' })
+  } catch (error) {
+    logger.error('Resend verification error:', error)
+    res.status(500).json({ error: 'Error al enviar el email' })
+  }
+})
+
+// Verify email with token
+router.post('/verify-email', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token es requerido' })
+    }
+
+    const verificationToken = await prisma.emailVerificationToken.findUnique({
+      where: { token },
+      include: { user: true }
+    })
+
+    if (!verificationToken) {
+      return res.status(400).json({ error: 'Token inválido' })
+    }
+
+    if (verificationToken.usedAt) {
+      return res.status(400).json({ error: 'Este enlace ya fue utilizado' })
+    }
+
+    if (verificationToken.expiresAt < new Date()) {
+      return res.status(400).json({ error: 'El enlace ha expirado. Solicita uno nuevo.' })
+    }
+
+    // Verify email and mark token as used
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: verificationToken.userId },
+        data: { 
+          emailVerified: true,
+          emailVerifiedAt: new Date()
+        }
+      }),
+      prisma.emailVerificationToken.update({
+        where: { id: verificationToken.id },
+        data: { usedAt: new Date() }
+      })
+    ])
+
+    // Send welcome email
+    if (isEmailConfigured()) {
+      await sendWelcomeEmail(
+        verificationToken.user.email,
+        verificationToken.user.username,
+        verificationToken.user.isCreator
+      )
+    }
+
+    logger.info(`Email verified for user ${verificationToken.userId}`)
+    res.json({ message: '¡Email verificado exitosamente!' })
+  } catch (error) {
+    logger.error('Verify email error:', error)
+    res.status(500).json({ error: 'Error al verificar el email' })
+  }
 })
 
 export default router
