@@ -22,6 +22,16 @@ if (!JWT_SECRET) {
   throw new Error('CRITICAL: JWT_SECRET environment variable is required');
 }
 
+/**
+ * Safe error message - hide internal details in production
+ */
+function safeErrorMessage(error: unknown, fallback: string): string {
+  if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
+}
+
 // Frontend URLs
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
@@ -139,7 +149,7 @@ router.post('/create', paymentLimiter, authMiddleware, async (req: AuthRequest, 
   } catch (error) {
     console.error('[Webpay] Error creating payment:', error);
     res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Error al crear pago' 
+      error: safeErrorMessage(error, 'Error al crear pago')
     });
   }
 });
@@ -237,7 +247,7 @@ router.get('/return', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Webpay] Error in return handler:', error);
     res.redirect(`${FRONTEND_URL}/payments/result?error=${encodeURIComponent(
-      error instanceof Error ? error.message : 'Error al procesar pago'
+      safeErrorMessage(error, 'Error al procesar pago')
     )}`);
   }
 });
@@ -272,7 +282,7 @@ router.get('/status/:buyOrder', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Webpay] Error getting status:', error);
     res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Error al obtener estado' 
+      error: safeErrorMessage(error, 'Error al obtener estado')
     });
   }
 });
@@ -320,7 +330,7 @@ router.get('/my-transactions', authMiddleware, async (req: AuthRequest, res: Res
   } catch (error) {
     console.error('[Webpay] Error getting transactions:', error);
     res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Error al obtener transacciones' 
+      error: safeErrorMessage(error, 'Error al obtener transacciones')
     });
   }
 });
@@ -364,7 +374,7 @@ router.post('/refund', authMiddleware, async (req: AuthRequest, res: Response) =
   } catch (error) {
     console.error('[Webpay] Error refunding:', error);
     res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Error al procesar reembolso' 
+      error: safeErrorMessage(error, 'Error al procesar reembolso')
     });
   }
 });

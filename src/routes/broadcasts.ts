@@ -400,20 +400,33 @@ async function processBroadcast(broadcastId: string, creatorId: string, creatorU
     let sentCount = 0
     let failedCount = 0
 
+    // OPTIMIZATION: Pre-load all existing conversations to avoid N+1 queries
+    const recipientIds = subscriptions.map(s => s.userId)
+    const existingConversations = await prisma.conversation.findMany({
+      where: {
+        OR: [
+          { participant1Id: creatorUserId, participant2Id: { in: recipientIds } },
+          { participant1Id: { in: recipientIds }, participant2Id: creatorUserId }
+        ]
+      }
+    })
+
+    // Create a map for quick lookup
+    const conversationMap = new Map<string, typeof existingConversations[0]>()
+    for (const conv of existingConversations) {
+      const otherParticipant = conv.participant1Id === creatorUserId 
+        ? conv.participant2Id 
+        : conv.participant1Id
+      conversationMap.set(otherParticipant, conv)
+    }
+
     // Enviar mensaje a cada suscriptor
     for (const subscription of subscriptions) {
       try {
         const recipientId = subscription.userId
 
-        // Crear o encontrar conversación
-        let conversation = await prisma.conversation.findFirst({
-          where: {
-            OR: [
-              { participant1Id: creatorUserId, participant2Id: recipientId },
-              { participant1Id: recipientId, participant2Id: creatorUserId }
-            ]
-          }
-        })
+        // Use pre-loaded conversation or create new one
+        let conversation = conversationMap.get(recipientId)
 
         if (!conversation) {
           conversation = await prisma.conversation.create({
@@ -422,6 +435,8 @@ async function processBroadcast(broadcastId: string, creatorId: string, creatorU
               participant2Id: recipientId
             }
           })
+          // Add to map for potential future use
+          conversationMap.set(recipientId, conversation)
         }
 
         // Crear mensaje
