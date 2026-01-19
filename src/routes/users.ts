@@ -3,7 +3,12 @@ import { createLogger } from '../lib/logger'
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
-import { sanitizePagination } from '../middleware/rateLimiter';
+import { sanitizePagination, authLimiter } from '../middleware/rateLimiter';
+import { 
+  checkAccountDeletion, 
+  deleteUserAccount, 
+  exportUserData 
+} from '../services/accountDeletionService';
 
 const router = Router();
 const logger = createLogger('Users');
@@ -338,6 +343,73 @@ router.get('/me/payments', authenticate, async (req: Request, res: Response): Pr
   } catch (error) {
     logger.error('Error al obtener historial de pagos:', error);
     res.status(500).json({ error: 'Error al obtener historial de pagos' });
+  }
+});
+
+// ==================== ACCOUNT DELETION ====================
+
+// GET /api/users/me/deletion-check - Pre-check before account deletion
+router.get('/me/deletion-check', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.userId;
+    const result = await checkAccountDeletion(userId);
+    res.json(result);
+  } catch (error) {
+    logger.error('Error checking account deletion:', error);
+    res.status(500).json({ error: 'Error al verificar eliminación de cuenta' });
+  }
+});
+
+// DELETE /api/users/me - Delete user account permanently
+router.delete('/me', authenticate, authLimiter, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.userId;
+    const { password, reason } = req.body;
+
+    if (!password) {
+      res.status(400).json({ error: 'Contraseña requerida para confirmar eliminación' });
+      return;
+    }
+
+    const result = await deleteUserAccount(userId, password, reason);
+    
+    // Clear auth cookies
+    res.clearCookie('access_token');
+    res.clearCookie('refresh_token');
+    
+    res.json(result);
+  } catch (error: any) {
+    logger.error('Error deleting account:', error);
+    
+    // Handle specific errors
+    if (error.message === 'Contraseña incorrecta') {
+      res.status(401).json({ error: error.message });
+      return;
+    }
+    
+    if (error.message.includes('balance pendiente')) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    
+    res.status(500).json({ error: 'Error al eliminar la cuenta' });
+  }
+});
+
+// GET /api/users/me/export - Export all user data (GDPR)
+router.get('/me/export', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.userId;
+    const data = await exportUserData(userId);
+    
+    // Set headers for download
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="apapacho-data-export-${new Date().toISOString().split('T')[0]}.json"`);
+    
+    res.json(data);
+  } catch (error) {
+    logger.error('Error exporting user data:', error);
+    res.status(500).json({ error: 'Error al exportar datos' });
   }
 });
 

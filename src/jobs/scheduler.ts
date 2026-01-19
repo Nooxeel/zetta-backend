@@ -34,6 +34,7 @@ const PAYOUT_CRON = process.env.PAYOUT_CRON || '0 2 * * 0'; // Domingos 2am
 const CLEANUP_CRON = process.env.CLEANUP_CRON || '0 3 * * *'; // Diario 3am
 const RETRY_CRON = process.env.RETRY_CRON || '0 * * * *'; // Cada hora
 const RENEWAL_CRON = process.env.RENEWAL_CRON || '0 6 * * *'; // Diario 6am
+const TOKEN_CLEANUP_CRON = process.env.TOKEN_CLEANUP_CRON || '0 4 * * *'; // Diario 4am
 
 // Publisher config
 const publisherConfig: PublisherConfig = {
@@ -215,6 +216,70 @@ function subscriptionRenewalJob() {
 }
 
 /**
+ * Job 6: Limpiar refresh tokens expirados/revocados
+ * NOTE: RefreshToken model requires migration - run: npx prisma db push && npx prisma generate
+ */
+function tokenCleanupJob() {
+  jobs.tokenCleanup = cron.schedule(TOKEN_CLEANUP_CRON, async () => {
+    console.log('[Job:TokenCleanup] Limpiando tokens expirados...');
+    
+    try {
+      // Limpiar refresh tokens expirados o revocados (mayores a 7 días)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      
+      // Use raw SQL to avoid TypeScript errors before Prisma generate
+      let refreshTokensCount = 0;
+      try {
+        const result = await prisma.$executeRaw`
+          DELETE FROM "RefreshToken" 
+          WHERE "expiresAt" < ${sevenDaysAgo}
+          OR ("revokedAt" IS NOT NULL AND "revokedAt" < ${sevenDaysAgo})
+        `;
+        refreshTokensCount = result;
+      } catch (e) {
+        // Table might not exist yet
+        console.log('[Job:TokenCleanup] RefreshToken table not found (run migration first)');
+      }
+      
+      // Limpiar password reset tokens expirados
+      const passwordTokensDeleted = await prisma.passwordResetToken.deleteMany({
+        where: {
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            { usedAt: { not: null } }
+          ]
+        }
+      });
+      
+      // Limpiar email verification tokens expirados
+      const emailTokensDeleted = await prisma.emailVerificationToken.deleteMany({
+        where: {
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            { usedAt: { not: null } }
+          ]
+        }
+      });
+      
+      const total = refreshTokensCount + passwordTokensDeleted.count + emailTokensDeleted.count;
+      
+      if (total > 0) {
+        console.log(
+          `[Job:TokenCleanup] Limpiados: ` +
+          `${refreshTokensCount} refresh, ` +
+          `${passwordTokensDeleted.count} password reset, ` +
+          `${emailTokensDeleted.count} email verification`
+        );
+      }
+    } catch (error) {
+      console.error('[Job:TokenCleanup] Error:', error);
+    }
+  });
+  
+  console.log(`✅ Job 'tokenCleanup' iniciado: ${TOKEN_CLEANUP_CRON}`);
+}
+
+/**
  * Inicia todos los jobs
  */
 export function startScheduler(): void {
@@ -231,6 +296,7 @@ export function startScheduler(): void {
   outboxCleanupJob();
   payoutRetryJob();
   subscriptionRenewalJob();
+  tokenCleanupJob();
   
   console.log('');
 }
@@ -279,6 +345,27 @@ export async function runJobManually(jobName: string): Promise<void> {
       const renewalResult = await processSubscriptionRenewals();
       console.log(`[Manual] Renewal result:`, renewalResult);
       break;
+
+    case 'tokenCleanup':
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      let refreshDeleted = 0;
+      try {
+        refreshDeleted = await prisma.$executeRaw`
+          DELETE FROM "RefreshToken" 
+          WHERE "expiresAt" < ${sevenDaysAgo}
+          OR ("revokedAt" IS NOT NULL AND "revokedAt" < ${sevenDaysAgo})
+        `;
+      } catch (e) {
+        console.log('[Manual] RefreshToken table not found');
+      }
+      const pwdDeleted = await prisma.passwordResetToken.deleteMany({
+        where: { OR: [{ expiresAt: { lt: new Date() } }, { usedAt: { not: null } }] }
+      });
+      const emailDeleted = await prisma.emailVerificationToken.deleteMany({
+        where: { OR: [{ expiresAt: { lt: new Date() } }, { usedAt: { not: null } }] }
+      });
+      console.log(`[Manual] TokenCleanup: ${refreshDeleted} refresh, ${pwdDeleted.count} password, ${emailDeleted.count} email`);
+      break;
       
     default:
       throw new Error(`Job desconocido: ${jobName}`);
@@ -303,7 +390,8 @@ export function getSchedulerStatus(): {
       { name: 'payoutCalculation', cron: PAYOUT_CRON, running: !!jobs.payout },
       { name: 'outboxCleanup', cron: CLEANUP_CRON, running: !!jobs.cleanup },
       { name: 'payoutRetry', cron: RETRY_CRON, running: !!jobs.retry },
-      { name: 'subscriptionRenewal', cron: RENEWAL_CRON, running: !!jobs.renewal }
+      { name: 'subscriptionRenewal', cron: RENEWAL_CRON, running: !!jobs.renewal },
+      { name: 'tokenCleanup', cron: TOKEN_CLEANUP_CRON, running: !!jobs.tokenCleanup }
     ]
   };
 }
