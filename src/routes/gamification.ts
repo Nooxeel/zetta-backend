@@ -280,6 +280,23 @@ router.get('/my-level', authenticate, async (req: Request, res: Response) => {
       where: { level: levelInfo.level },
     });
 
+    // Calculate progress within current level
+    let progress = null;
+    if (levelInfo.nextLevel) {
+      const levels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+      const currentLevelMinXp = levels.find(l => l.level === levelInfo.level)?.minXp || 0;
+      const nextLevelMinXp = levels.find(l => l.level === levelInfo.nextLevel!.level)?.minXp || currentLevelMinXp + 100;
+      
+      const xpInCurrentLevel = userPoints.xp - currentLevelMinXp;
+      const xpNeededForLevel = nextLevelMinXp - currentLevelMinXp;
+      
+      progress = {
+        current: xpInCurrentLevel,
+        needed: xpNeededForLevel,
+        percentage: Math.round((xpInCurrentLevel / xpNeededForLevel) * 100),
+      };
+    }
+
     res.json({
       currentXp: userPoints.xp,
       level: levelInfo.level,
@@ -288,15 +305,7 @@ router.get('/my-level', authenticate, async (req: Request, res: Response) => {
       levelColor: levelInfo.color,
       perks: currentLevelData?.perks || [],
       nextLevel: levelInfo.nextLevel,
-      progress: levelInfo.nextLevel
-        ? {
-            current: userPoints.xp,
-            needed: levelInfo.nextLevel.xpNeeded + userPoints.xp,
-            percentage: Math.round(
-              (userPoints.xp / (levelInfo.nextLevel.xpNeeded + userPoints.xp)) * 100
-            ),
-          }
-        : null,
+      progress,
     });
   } catch (error) {
     console.error('Error fetching user level:', error);
