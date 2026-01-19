@@ -33,10 +33,11 @@ export function generateSignedUrl(
   // Calculate expiration timestamp
   const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds
 
-  // Generate signed URL
+  // Generate signed URL - use 'upload' type since images are uploaded publicly
+  // For true protection, would need to change upload settings to authenticated
   const signedUrl = cloudinary.url(publicId, {
     sign_url: true,
-    type: 'authenticated', // Require signature for access
+    type: 'upload', // Images are uploaded publicly, not authenticated
     resource_type: resourceType,
     expires_at: expiresAt,
     transformation,
