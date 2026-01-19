@@ -15,51 +15,129 @@ interface AuthRequest extends Request {
 
 // ==================== MISSION DEFINITIONS ====================
 
+// ========== FAN MISSIONS ==========
 const DAILY_MISSIONS = [
-  { code: 'daily_login', name: 'Iniciar Sesión', description: 'Inicia sesión hoy', icon: '📅', actionType: 'login', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'ENGAGEMENT' },
-  { code: 'daily_like', name: 'Dar Like', description: 'Da like a un post', icon: '❤️', actionType: 'like', targetCount: 1, pointsReward: 3, xpReward: 5, category: 'SOCIAL' },
-  { code: 'daily_comment', name: 'Comentar', description: 'Comenta en un perfil', icon: '💬', actionType: 'comment', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'SOCIAL' },
-  { code: 'daily_visit', name: 'Explorador', description: 'Visita 3 perfiles', icon: '👀', actionType: 'visit', targetCount: 3, pointsReward: 5, xpReward: 10, category: 'DISCOVERY' },
-  { code: 'daily_favorite', name: 'Favorito del Día', description: 'Añade un creador a favoritos', icon: '⭐', actionType: 'favorite', targetCount: 1, pointsReward: 5, xpReward: 8, category: 'DISCOVERY' },
+  // Engagement
+  { code: 'daily_login', name: 'Iniciar Sesión', description: 'Inicia sesión hoy', icon: '📅', actionType: 'login', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'ENGAGEMENT', forCreators: false },
+  // Social
+  { code: 'daily_like', name: 'Dar Like', description: 'Da like a un post', icon: '❤️', actionType: 'like', targetCount: 1, pointsReward: 3, xpReward: 5, category: 'SOCIAL', forCreators: false },
+  { code: 'daily_comment', name: 'Comentar', description: 'Comenta en un perfil', icon: '💬', actionType: 'comment', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'SOCIAL', forCreators: false },
+  // Discovery
+  { code: 'daily_visit', name: 'Explorador', description: 'Visita 3 perfiles', icon: '👀', actionType: 'visit', targetCount: 3, pointsReward: 5, xpReward: 10, category: 'DISCOVERY', forCreators: false },
+  { code: 'daily_favorite', name: 'Favorito del Día', description: 'Añade un creador a favoritos', icon: '⭐', actionType: 'favorite', targetCount: 1, pointsReward: 5, xpReward: 8, category: 'DISCOVERY', forCreators: false },
+  // Messaging
+  { code: 'daily_message', name: 'Mensajero', description: 'Envía un mensaje', icon: '✉️', actionType: 'message', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'MESSAGING', forCreators: false },
+  // Tipping
+  { code: 'daily_tip', name: 'Propinador', description: 'Envía una propina', icon: '💸', actionType: 'tip', targetCount: 1, pointsReward: 10, xpReward: 15, category: 'TIPPING', forCreators: false },
+  // Spending
+  { code: 'daily_subscribe', name: 'Nuevo Fan', description: 'Suscríbete a un creador', icon: '🎟️', actionType: 'subscribe', targetCount: 1, pointsReward: 15, xpReward: 20, category: 'SPENDING', forCreators: false },
+  // Fun
+  { code: 'daily_ruleta', name: 'Suerte del Día', description: 'Juega la ruleta', icon: '🎰', actionType: 'ruleta', targetCount: 1, pointsReward: 3, xpReward: 5, category: 'ENGAGEMENT', forCreators: false },
+  { code: 'daily_share', name: 'Compartidor', description: 'Comparte un perfil', icon: '📤', actionType: 'share', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'SOCIAL', forCreators: false },
 ];
 
 const WEEKLY_MISSIONS = [
-  { code: 'weekly_streak', name: 'Racha Semanal', description: 'Inicia sesión 5 días seguidos', icon: '🔥', actionType: 'login', targetCount: 5, pointsReward: 25, xpReward: 50, category: 'ENGAGEMENT' },
-  { code: 'weekly_tips', name: 'Generoso', description: 'Envía 3 propinas', icon: '💰', actionType: 'tip', targetCount: 3, pointsReward: 30, xpReward: 60, category: 'TIPPING' },
-  { code: 'weekly_social', name: 'Social', description: 'Deja 5 comentarios', icon: '🗣️', actionType: 'comment', targetCount: 5, pointsReward: 25, xpReward: 50, category: 'SOCIAL' },
-  { code: 'weekly_likes', name: 'Fan Activo', description: 'Da 10 likes', icon: '💕', actionType: 'like', targetCount: 10, pointsReward: 20, xpReward: 40, category: 'SOCIAL' },
-  { code: 'weekly_explorer', name: 'Explorador Premium', description: 'Visita 10 perfiles diferentes', icon: '🌎', actionType: 'visit', targetCount: 10, pointsReward: 20, xpReward: 40, category: 'DISCOVERY' },
+  // Engagement
+  { code: 'weekly_streak', name: 'Racha Semanal', description: 'Inicia sesión 5 días seguidos', icon: '🔥', actionType: 'login', targetCount: 5, pointsReward: 25, xpReward: 50, category: 'ENGAGEMENT', forCreators: false },
+  // Tipping
+  { code: 'weekly_tips', name: 'Generoso', description: 'Envía 3 propinas', icon: '💰', actionType: 'tip', targetCount: 3, pointsReward: 30, xpReward: 60, category: 'TIPPING', forCreators: false },
+  // Social
+  { code: 'weekly_social', name: 'Social', description: 'Deja 5 comentarios', icon: '🗣️', actionType: 'comment', targetCount: 5, pointsReward: 25, xpReward: 50, category: 'SOCIAL', forCreators: false },
+  { code: 'weekly_likes', name: 'Fan Activo', description: 'Da 10 likes', icon: '💕', actionType: 'like', targetCount: 10, pointsReward: 20, xpReward: 40, category: 'SOCIAL', forCreators: false },
+  // Discovery
+  { code: 'weekly_explorer', name: 'Explorador Premium', description: 'Visita 10 perfiles diferentes', icon: '🌎', actionType: 'visit', targetCount: 10, pointsReward: 20, xpReward: 40, category: 'DISCOVERY', forCreators: false },
+  // Messaging
+  { code: 'weekly_messages', name: 'Conversador', description: 'Envía 10 mensajes', icon: '💬', actionType: 'message', targetCount: 10, pointsReward: 25, xpReward: 50, category: 'MESSAGING', forCreators: false },
+  // Spending
+  { code: 'weekly_subscribe', name: 'Coleccionista', description: 'Suscríbete a 2 creadores', icon: '👑', actionType: 'subscribe', targetCount: 2, pointsReward: 40, xpReward: 80, category: 'SPENDING', forCreators: false },
+  { code: 'weekly_spend', name: 'Gran Gastador', description: 'Gasta $10+ en propinas', icon: '🤑', actionType: 'spend', targetCount: 10, pointsReward: 50, xpReward: 100, category: 'SPENDING', forCreators: false },
+  // Discovery
+  { code: 'weekly_profiles', name: 'Curioso', description: 'Mira 20 perfiles', icon: '🔍', actionType: 'visit', targetCount: 20, pointsReward: 20, xpReward: 40, category: 'DISCOVERY', forCreators: false },
+];
+
+// ========== CREATOR MISSIONS ==========
+const CREATOR_DAILY_MISSIONS = [
+  // Content
+  { code: 'creator_daily_post', name: 'Publicador', description: 'Publica 1 post', icon: '📸', actionType: 'post', targetCount: 1, pointsReward: 10, xpReward: 15, category: 'CONTENT', forCreators: true },
+  { code: 'creator_daily_story', name: 'Historia del Día', description: 'Sube una historia', icon: '📱', actionType: 'story', targetCount: 1, pointsReward: 8, xpReward: 10, category: 'CONTENT', forCreators: true },
+  // Engagement
+  { code: 'creator_daily_reply', name: 'Respondedor', description: 'Responde 3 mensajes', icon: '💬', actionType: 'reply', targetCount: 3, pointsReward: 10, xpReward: 15, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+  { code: 'creator_daily_dm', name: 'Conectar', description: 'Envía un mensaje a un fan', icon: '✉️', actionType: 'dm_fan', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+  // Growth
+  { code: 'creator_daily_live', name: 'En Vivo', description: 'Haz un live/stream', icon: '🔴', actionType: 'live', targetCount: 1, pointsReward: 20, xpReward: 30, category: 'CREATOR_GROWTH', forCreators: true },
+];
+
+const CREATOR_WEEKLY_MISSIONS = [
+  // Content
+  { code: 'creator_weekly_posts', name: 'Creador Activo', description: 'Publica 5 posts', icon: '🎨', actionType: 'post', targetCount: 5, pointsReward: 40, xpReward: 60, category: 'CONTENT', forCreators: true },
+  { code: 'creator_weekly_video', name: 'Videógrafo', description: 'Sube 2 videos', icon: '🎬', actionType: 'video', targetCount: 2, pointsReward: 30, xpReward: 50, category: 'CONTENT', forCreators: true },
+  // Engagement  
+  { code: 'creator_weekly_replies', name: 'Atención al Fan', description: 'Responde 20 mensajes', icon: '📨', actionType: 'reply', targetCount: 20, pointsReward: 50, xpReward: 80, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+  { code: 'creator_weekly_broadcast', name: 'Comunicador', description: 'Envía un Mass DM', icon: '📢', actionType: 'broadcast', targetCount: 1, pointsReward: 20, xpReward: 30, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+  // Growth
+  { code: 'creator_weekly_earnings', name: 'Meta de Ingresos', description: 'Gana $50+ esta semana', icon: '💎', actionType: 'earn', targetCount: 50, pointsReward: 75, xpReward: 100, category: 'CREATOR_GROWTH', forCreators: true },
+  { code: 'creator_weekly_subs', name: 'Magnetismo', description: 'Consigue 3 nuevos suscriptores', icon: '🧲', actionType: 'new_subscriber', targetCount: 3, pointsReward: 60, xpReward: 80, category: 'CREATOR_GROWTH', forCreators: true },
+  { code: 'creator_weekly_tips', name: 'Propinero', description: 'Recibe 5 propinas', icon: '💵', actionType: 'receive_tip', targetCount: 5, pointsReward: 40, xpReward: 60, category: 'CREATOR_GROWTH', forCreators: true },
 ];
 
 // ==================== SEED MISSIONS (run once) ====================
 
 async function ensureMissionsSeeded() {
-  const existingCount = await prisma.mission.count();
-  if (existingCount > 0) return;
-
-  // Seed daily missions
-  for (const mission of DAILY_MISSIONS) {
-    await prisma.mission.create({
-      data: {
-        ...mission,
-        type: 'DAILY',
-        category: mission.category as any,
+  // Check if we need to add new missions (version check)
+  const missionCount = await prisma.mission.count();
+  const expectedCount = DAILY_MISSIONS.length + WEEKLY_MISSIONS.length + 
+                        CREATOR_DAILY_MISSIONS.length + CREATOR_WEEKLY_MISSIONS.length;
+  
+  // If we have fewer missions than expected, seed missing ones
+  if (missionCount < expectedCount) {
+    console.log(`📋 Seeding missions... (current: ${missionCount}, expected: ${expectedCount})`);
+    
+    // Get existing mission codes
+    const existingMissions = await prisma.mission.findMany({ select: { code: true } });
+    const existingCodes = new Set(existingMissions.map(m => m.code));
+    
+    // Seed fan daily missions
+    for (const mission of DAILY_MISSIONS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'DAILY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
       }
-    });
-  }
-
-  // Seed weekly missions
-  for (const mission of WEEKLY_MISSIONS) {
-    await prisma.mission.create({
-      data: {
-        ...mission,
-        type: 'WEEKLY',
-        category: mission.category as any,
+    }
+    
+    // Seed fan weekly missions
+    for (const mission of WEEKLY_MISSIONS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'WEEKLY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
       }
-    });
+    }
+    
+    // Seed creator daily missions
+    for (const mission of CREATOR_DAILY_MISSIONS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'DAILY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
+      }
+    }
+    
+    // Seed creator weekly missions
+    for (const mission of CREATOR_WEEKLY_MISSIONS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'WEEKLY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
+      }
+    }
+    
+    console.log('✅ Missions seeded successfully');
   }
-
-  console.log('✅ Missions seeded successfully');
 }
 
 // Call on startup
@@ -96,7 +174,7 @@ function getEndOfWeek(): Date {
   return end;
 }
 
-async function assignDailyMissions(userId: string) {
+async function assignDailyMissions(userId: string, isCreator: boolean = false) {
   const startOfDay = getStartOfDay();
   const endOfDay = getEndOfDay();
 
@@ -111,13 +189,23 @@ async function assignDailyMissions(userId: string) {
 
   if (existingDaily) return; // Already assigned
 
-  // Get 3 random daily missions
-  const allDaily = await prisma.mission.findMany({
-    where: { type: 'DAILY', isActive: true }
+  // Get random daily missions based on user type
+  // Fans get 3 fan missions, Creators get 3 fan + 2 creator missions
+  const fanMissions = await prisma.mission.findMany({
+    where: { type: 'DAILY', isActive: true, forCreators: false }
   });
 
-  const shuffled = allDaily.sort(() => Math.random() - 0.5);
-  const selectedMissions = shuffled.slice(0, 3);
+  const shuffledFan = fanMissions.sort(() => Math.random() - 0.5);
+  const selectedMissions = shuffledFan.slice(0, 3);
+
+  // If user is a creator, also give them creator missions
+  if (isCreator) {
+    const creatorMissions = await prisma.mission.findMany({
+      where: { type: 'DAILY', isActive: true, forCreators: true }
+    });
+    const shuffledCreator = creatorMissions.sort(() => Math.random() - 0.5);
+    selectedMissions.push(...shuffledCreator.slice(0, 2));
+  }
 
   // Assign missions
   for (const mission of selectedMissions) {
@@ -132,7 +220,7 @@ async function assignDailyMissions(userId: string) {
   }
 }
 
-async function assignWeeklyMissions(userId: string) {
+async function assignWeeklyMissions(userId: string, isCreator: boolean = false) {
   const startOfWeek = getStartOfWeek();
   const endOfWeek = getEndOfWeek();
 
@@ -147,13 +235,23 @@ async function assignWeeklyMissions(userId: string) {
 
   if (existingWeekly) return; // Already assigned
 
-  // Get 2 random weekly missions
-  const allWeekly = await prisma.mission.findMany({
-    where: { type: 'WEEKLY', isActive: true }
+  // Get random weekly missions based on user type
+  // Fans get 2 fan missions, Creators get 2 fan + 2 creator missions
+  const fanMissions = await prisma.mission.findMany({
+    where: { type: 'WEEKLY', isActive: true, forCreators: false }
   });
 
-  const shuffled = allWeekly.sort(() => Math.random() - 0.5);
-  const selectedMissions = shuffled.slice(0, 2);
+  const shuffledFan = fanMissions.sort(() => Math.random() - 0.5);
+  const selectedMissions = shuffledFan.slice(0, 2);
+
+  // If user is a creator, also give them creator missions
+  if (isCreator) {
+    const creatorMissions = await prisma.mission.findMany({
+      where: { type: 'WEEKLY', isActive: true, forCreators: true }
+    });
+    const shuffledCreator = creatorMissions.sort(() => Math.random() - 0.5);
+    selectedMissions.push(...shuffledCreator.slice(0, 2));
+  }
 
   // Assign missions
   for (const mission of selectedMissions) {
@@ -177,11 +275,12 @@ type UserMissionWithMission = UserMission & { mission: Mission };
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
+    const isCreator = req.user?.isCreator || false;
     const now = new Date();
 
-    // Ensure missions are assigned
-    await assignDailyMissions(userId);
-    await assignWeeklyMissions(userId);
+    // Ensure missions are assigned (creators get extra missions)
+    await assignDailyMissions(userId, isCreator);
+    await assignWeeklyMissions(userId, isCreator);
 
     // Get current missions (not expired)
     const userMissions = await prisma.userMission.findMany({
@@ -198,57 +297,58 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       ]
     });
 
-    // Format response
+    // Format response - separate fan and creator missions
+    const formatMission = (um: UserMissionWithMission) => ({
+      id: um.id,
+      missionId: um.mission.id,
+      code: um.mission.code,
+      name: um.mission.name,
+      description: um.mission.description,
+      icon: um.mission.icon,
+      type: um.mission.type,
+      category: um.mission.category,
+      actionType: um.mission.actionType,
+      targetCount: um.mission.targetCount,
+      progress: um.progress,
+      completed: um.completed,
+      claimed: um.claimed,
+      pointsReward: um.mission.pointsReward,
+      xpReward: um.mission.xpReward,
+      expiresAt: um.expiresAt,
+      forCreators: um.mission.forCreators
+    });
+
     const daily = userMissions
-      .filter((um: UserMissionWithMission) => um.mission.type === 'DAILY')
-      .map((um: UserMissionWithMission) => ({
-        id: um.id,
-        missionId: um.mission.id,
-        code: um.mission.code,
-        name: um.mission.name,
-        description: um.mission.description,
-        icon: um.mission.icon,
-        type: um.mission.type,
-        category: um.mission.category,
-        actionType: um.mission.actionType,
-        targetCount: um.mission.targetCount,
-        progress: um.progress,
-        completed: um.completed,
-        claimed: um.claimed,
-        pointsReward: um.mission.pointsReward,
-        xpReward: um.mission.xpReward,
-        expiresAt: um.expiresAt
-      }));
+      .filter((um: UserMissionWithMission) => um.mission.type === 'DAILY' && !um.mission.forCreators)
+      .map(formatMission);
 
     const weekly = userMissions
-      .filter((um: UserMissionWithMission) => um.mission.type === 'WEEKLY')
-      .map((um: UserMissionWithMission) => ({
-        id: um.id,
-        missionId: um.mission.id,
-        code: um.mission.code,
-        name: um.mission.name,
-        description: um.mission.description,
-        icon: um.mission.icon,
-        type: um.mission.type,
-        category: um.mission.category,
-        actionType: um.mission.actionType,
-        targetCount: um.mission.targetCount,
-        progress: um.progress,
-        completed: um.completed,
-        claimed: um.claimed,
-        pointsReward: um.mission.pointsReward,
-        xpReward: um.mission.xpReward,
-        expiresAt: um.expiresAt
-      }));
+      .filter((um: UserMissionWithMission) => um.mission.type === 'WEEKLY' && !um.mission.forCreators)
+      .map(formatMission);
+
+    // Creator-specific missions
+    const creatorDaily = userMissions
+      .filter((um: UserMissionWithMission) => um.mission.type === 'DAILY' && um.mission.forCreators)
+      .map(formatMission);
+
+    const creatorWeekly = userMissions
+      .filter((um: UserMissionWithMission) => um.mission.type === 'WEEKLY' && um.mission.forCreators)
+      .map(formatMission);
 
     res.json({
       daily,
       weekly,
+      creatorDaily,
+      creatorWeekly,
       summary: {
         dailyCompleted: daily.filter((m: { completed: boolean }) => m.completed).length,
         dailyTotal: daily.length,
         weeklyCompleted: weekly.filter((m: { completed: boolean }) => m.completed).length,
         weeklyTotal: weekly.length,
+        creatorDailyCompleted: creatorDaily.filter((m: { completed: boolean }) => m.completed).length,
+        creatorDailyTotal: creatorDaily.length,
+        creatorWeeklyCompleted: creatorWeekly.filter((m: { completed: boolean }) => m.completed).length,
+        creatorWeeklyTotal: creatorWeekly.length,
         unclaimedRewards: userMissions.filter((um: UserMissionWithMission) => um.completed && !um.claimed).length
       }
     });

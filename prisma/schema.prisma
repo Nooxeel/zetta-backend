@@ -880,6 +880,7 @@ model Mission {
   targetCount   Int           @default(1) // How many actions needed
   pointsReward  Int           // Points given on completion
   xpReward      Int           @default(0) // XP given on completion
+  forCreators   Boolean       @default(false) // true = only for creators
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
 
@@ -887,6 +888,7 @@ model Mission {
 
   @@index([type])
   @@index([isActive])
+  @@index([forCreators])
 }
 
 enum MissionType {
@@ -899,6 +901,11 @@ enum MissionCategory {
   TIPPING       // Send tips
   SOCIAL        // Comments, likes
   DISCOVERY     // Visit profiles, favorites
+  MESSAGING     // Sending messages
+  SPENDING      // Subscriptions, purchases
+  CONTENT       // Creator: posting content
+  CREATOR_ENGAGEMENT // Creator: interacting with fans
+  CREATOR_GROWTH     // Creator: getting subscribers, earnings
 }
 
 // User's assigned missions
