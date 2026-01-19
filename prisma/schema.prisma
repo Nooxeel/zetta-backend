@@ -865,6 +865,64 @@ model FanLevel {
   @@index([minXp])
 }
 
+// ==================== MISSIONS SYSTEM ====================
+
+// Mission templates (daily/weekly objectives)
+model Mission {
+  id            String        @id @default(uuid())
+  code          String        @unique // 'daily_login', 'tip_3_creators', etc.
+  name          String        // Display name
+  description   String        // What user needs to do
+  icon          String        // Emoji
+  type          MissionType   // DAILY or WEEKLY
+  category      MissionCategory
+  actionType    String        // 'login', 'tip', 'comment', 'favorite', 'like', etc.
+  targetCount   Int           @default(1) // How many actions needed
+  pointsReward  Int           // Points given on completion
+  xpReward      Int           @default(0) // XP given on completion
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+
+  userMissions  UserMission[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+enum MissionType {
+  DAILY
+  WEEKLY
+}
+
+enum MissionCategory {
+  ENGAGEMENT    // Login, interact
+  TIPPING       // Send tips
+  SOCIAL        // Comments, likes
+  DISCOVERY     // Visit profiles, favorites
+}
+
+// User's assigned missions
+model UserMission {
+  id            String        @id @default(uuid())
+  userId        String
+  missionId     String
+  progress      Int           @default(0) // Current count
+  completed     Boolean       @default(false)
+  claimed       Boolean       @default(false) // Has user claimed reward?
+  assignedAt    DateTime      @default(now()) // When mission was assigned
+  completedAt   DateTime?     // When completed
+  expiresAt     DateTime      // When mission expires
+  createdAt     DateTime      @default(now())
+
+  mission       Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, missionId, assignedAt])
+  @@index([userId])
+  @@index([missionId])
+  @@index([expiresAt])
+  @@index([completed])
+}
+
 // ==================== BLOCK SYSTEM ====================
 
 model BlockedUser {

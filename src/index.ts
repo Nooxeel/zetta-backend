@@ -47,6 +47,7 @@ import importRoutes from './routes/import'
 import paymentsRoutes from './routes/payments'
 import filesRoutes from './routes/files'
 import cardsRoutes from './routes/cards'
+import missionsRoutes from './routes/missions'
 
 // Import scheduler
 import { startScheduler, getSchedulerStatus } from './jobs/scheduler'
@@ -184,6 +185,7 @@ app.use('/api/referrals', referralsRoutes)
 app.use('/api/import', importRoutes)
 app.use('/api/payments/webpay', paymentsRoutes)
 app.use('/api/cards', cardsRoutes)
+app.use('/api/missions', missionsRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
