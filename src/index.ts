@@ -85,6 +85,8 @@ app.use(cors({
     const allowedOrigins = [
       'http://localhost:3000',
       'https://appapacho.vercel.app',
+      'https://appapacho.cl',
+      'https://www.appapacho.cl',
       FRONTEND_URL
     ].filter(Boolean)
 
@@ -212,6 +214,8 @@ const io = new SocketIOServer(httpServer, {
       const allowedOrigins = [
         'http://localhost:3000',
         'https://appapacho.vercel.app',
+        'https://appapacho.cl',
+        'https://www.appapacho.cl',
         FRONTEND_URL
       ].filter(Boolean) // Remove undefined/null values
 
