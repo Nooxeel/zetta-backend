@@ -798,31 +798,41 @@ model RouletteSpin {
 
 // ==================== GAMIFICATION: BADGES & LEVELS ====================
 
-// Badge definitions (static, seeded)
+// Badge/Achievement definitions (static, seeded)
 model Badge {
-  id          String   @id @default(uuid())
-  code        String   @unique // 'first_tip', 'streak_7', 'top_tipper', etc.
-  name        String   // Display name
-  description String   // How to earn it
-  icon        String   // Emoji or icon name
-  category    BadgeCategory
-  rarity      BadgeRarity
-  pointsReward Int     @default(0) // Bonus points when earned
-  createdAt   DateTime @default(now())
+  id            String        @id @default(uuid())
+  code          String        @unique // 'first_tip', 'streak_7', 'top_tipper', etc.
+  name          String        // Display name
+  description   String        // How to earn it
+  icon          String        // Emoji or icon name
+  category      BadgeCategory
+  rarity        BadgeRarity
+  pointsReward  Int           @default(0) // Bonus points when earned
+  xpReward      Int           @default(0) // XP when earned
+  // Unlock conditions (JSON format for flexibility)
+  unlockType    String        @default("manual") // 'streak', 'spending', 'subscriptions', 'tips', 'comments', 'likes', 'missions', 'level', 'tenure', 'manual'
+  unlockValue   Int           @default(1) // Target value to unlock
+  isHidden      Boolean       @default(false) // Hidden until unlocked (surprise badges)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
 
   // Users who have this badge
-  userBadges  UserBadge[]
+  userBadges    UserBadge[]
 
   @@index([category])
   @@index([rarity])
+  @@index([unlockType])
 }
 
 enum BadgeCategory {
   TIPPING      // Related to sending tips
   STREAK       // Login streaks
-  SOCIAL       // Comments, follows
+  SOCIAL       // Comments, follows, likes
   LOYALTY      // Subscriptions
-  MILESTONE    // Points milestones
+  MILESTONE    // Points/XP milestones
+  SPENDING     // Money spent
+  MISSIONS     // Completing missions
+  CREATOR      // Creator achievements
   SPECIAL      // Limited time or special events
 }
 
@@ -852,14 +862,20 @@ model UserBadge {
 
 // Fan Levels (calculated from XP/points)
 model FanLevel {
-  id          String   @id @default(uuid())
-  level       Int      @unique // 1, 2, 3, etc.
-  name        String   // "Novato", "Fan", "Super Fan", etc.
-  minXp       Int      // Minimum XP to reach this level
-  icon        String   // Emoji or icon
-  color       String   // Hex color for UI
-  perks       String[] // List of perks unlocked at this level
-  createdAt   DateTime @default(now())
+  id              String   @id @default(uuid())
+  level           Int      @unique // 1, 2, 3, etc.
+  name            String   // "Novato", "Fan", "Super Fan", etc.
+  minXp           Int      // Minimum XP to reach this level
+  icon            String   // Emoji or icon
+  color           String   // Hex color for UI
+  // Perks and rewards
+  perks           String[] // List of perks unlocked at this level
+  discountPercent Float    @default(0) // Discount on subscriptions (0-100)
+  bonusXpPercent  Float    @default(0) // Bonus XP multiplier (0-100)
+  exclusiveBadge  String?  // Badge code unlocked at this level
+  canAccessBeta   Boolean  @default(false) // Beta features access
+  prioritySupport Boolean  @default(false) // Priority customer support
+  createdAt       DateTime @default(now())
 
   @@index([level])
   @@index([minXp])

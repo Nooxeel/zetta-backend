@@ -1,144 +1,40 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
+import { 
+  checkAndAwardBadges as checkAchievements, 
+  getUserLevelPerks,
+  seedBadges,
+  seedLevelsWithPerks 
+} from '../services/achievementService';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// ==================== SEED DEFAULT LEVELS ====================
+// ==================== INITIALIZE ON STARTUP ====================
 
-const DEFAULT_LEVELS = [
-  { level: 1, name: 'Novato', minXp: 0, icon: '🌱', color: '#10b981' },
-  { level: 2, name: 'Aprendiz', minXp: 100, icon: '🌿', color: '#22c55e' },
-  { level: 3, name: 'Explorador', minXp: 300, icon: '🌲', color: '#84cc16' },
-  { level: 4, name: 'Aventurero', minXp: 600, icon: '⭐', color: '#eab308' },
-  { level: 5, name: 'Experto', minXp: 1000, icon: '🌟', color: '#f59e0b' },
-  { level: 6, name: 'Maestro', minXp: 1500, icon: '💫', color: '#f97316' },
-  { level: 7, name: 'Campeón', minXp: 2500, icon: '🏆', color: '#ef4444' },
-  { level: 8, name: 'Leyenda', minXp: 4000, icon: '👑', color: '#dc2626' },
-  { level: 9, name: 'Élite', minXp: 6000, icon: '💎', color: '#a855f7' },
-  { level: 10, name: 'Mítico', minXp: 10000, icon: '🔮', color: '#8b5cf6' },
-];
-
-// Seed levels if not exist (runs once on startup)
-async function seedLevelsIfNeeded() {
-  const count = await prisma.fanLevel.count();
-  if (count === 0) {
-    console.log('Seeding default fan levels...');
-    await prisma.fanLevel.createMany({ data: DEFAULT_LEVELS });
-    console.log('Default fan levels seeded successfully');
+// Seed badges and levels with perks
+async function initializeGamification() {
+  try {
+    await seedBadges();
+    await seedLevelsWithPerks();
+  } catch (error) {
+    console.error('Error initializing gamification:', error);
   }
 }
 
-// Run seed on module load
-seedLevelsIfNeeded().catch(console.error);
+initializeGamification();
 
-// ==================== BADGE CHECKING LOGIC ====================
+// ==================== BADGE CHECKING (uses achievementService) ====================
 
-interface BadgeCheckResult {
-  earned: boolean;
-  badgeCode: string;
-}
-
-// Check all badges for a user and award any earned ones
+// Wrapper to use the new achievement service
 async function checkAndAwardBadges(userId: string): Promise<string[]> {
-  const newBadges: string[] = [];
-
-  // Get user data for checking
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      userPoints: true,
-      donationsSent: true,
-      favorites: true,
-      subscriptions: { where: { status: 'active' } },
-      comments: { where: { isApproved: true } },
-    },
-  });
-
-  if (!user) return newBadges;
-
-  // Get already earned badges
-  const earnedBadges = await prisma.userBadge.findMany({
-    where: { userId },
-    select: { badgeId: true, badge: { select: { code: true } } },
-  });
-  const earnedCodes = new Set(earnedBadges.map((b) => b.badge.code));
-
-  // All badge checks
-  const checks: BadgeCheckResult[] = [];
-
-  // TIPPING checks
-  const totalDonations = user.donationsSent.length;
-  const uniqueCreators = new Set(user.donationsSent.map((d) => d.toCreatorId)).size;
-  const totalTipped = user.donationsSent.reduce((sum, d) => sum + d.amount, 0);
-
-  if (totalDonations >= 1) checks.push({ earned: true, badgeCode: 'first_tip' });
-  if (uniqueCreators >= 5) checks.push({ earned: true, badgeCode: 'generous_tipper' });
-  if (totalTipped >= 100) checks.push({ earned: true, badgeCode: 'big_spender' });
-  if (totalTipped >= 500) checks.push({ earned: true, badgeCode: 'whale' });
-
-  // STREAK checks
-  const streak = user.userPoints?.loginStreak || 0;
-  if (streak >= 3) checks.push({ earned: true, badgeCode: 'streak_3' });
-  if (streak >= 7) checks.push({ earned: true, badgeCode: 'streak_7' });
-  if (streak >= 30) checks.push({ earned: true, badgeCode: 'streak_30' });
-  if (streak >= 100) checks.push({ earned: true, badgeCode: 'streak_100' });
-
-  // SOCIAL checks
-  if (user.comments.length >= 1) checks.push({ earned: true, badgeCode: 'first_comment' });
-  if (user.comments.length >= 10) checks.push({ earned: true, badgeCode: 'commentator' });
-  if (user.favorites.length >= 1) checks.push({ earned: true, badgeCode: 'first_favorite' });
-  if (user.favorites.length >= 10) checks.push({ earned: true, badgeCode: 'collector' });
-
-  // LOYALTY checks
-  if (user.subscriptions.length >= 1) checks.push({ earned: true, badgeCode: 'first_sub' });
-  if (user.subscriptions.length >= 5) checks.push({ earned: true, badgeCode: 'super_supporter' });
-
-  // MILESTONE checks
-  const totalPoints = user.userPoints?.totalEarned || 0;
-  if (totalPoints >= 100) checks.push({ earned: true, badgeCode: 'points_100' });
-  if (totalPoints >= 500) checks.push({ earned: true, badgeCode: 'points_500' });
-  if (totalPoints >= 1000) checks.push({ earned: true, badgeCode: 'points_1000' });
-
-  // SPECIAL checks
-  if (user.ageVerified && user.emailVerified) checks.push({ earned: true, badgeCode: 'verified_fan' });
-
-  // Award new badges
-  for (const check of checks) {
-    if (check.earned && !earnedCodes.has(check.badgeCode)) {
-      const badge = await prisma.badge.findUnique({ where: { code: check.badgeCode } });
-      if (badge) {
-        await prisma.userBadge.create({
-          data: { userId, badgeId: badge.id },
-        });
-
-        // Award bonus points
-        if (badge.pointsReward > 0 && user.userPoints) {
-          await prisma.userPoints.update({
-            where: { id: user.userPoints.id },
-            data: {
-              points: { increment: badge.pointsReward },
-              totalEarned: { increment: badge.pointsReward },
-              xp: { increment: badge.pointsReward },
-            },
-          });
-
-          await prisma.pointsHistory.create({
-            data: {
-              userPointsId: user.userPoints.id,
-              amount: badge.pointsReward,
-              reason: `badge_earned:${badge.code}`,
-            },
-          });
-        }
-
-        newBadges.push(badge.code);
-      }
-    }
+  try {
+    return await checkAchievements(userId);
+  } catch (error) {
+    console.error('Error checking badges:', error);
+    return [];
   }
-
-  return newBadges;
 }
 
 // Calculate user level from XP
@@ -304,6 +200,10 @@ router.get('/my-level', authenticate, async (req: Request, res: Response) => {
       levelIcon: levelInfo.icon,
       levelColor: levelInfo.color,
       perks: currentLevelData?.perks || [],
+      discountPercent: currentLevelData?.discountPercent || 0,
+      bonusXpPercent: currentLevelData?.bonusXpPercent || 0,
+      canAccessBeta: currentLevelData?.canAccessBeta || false,
+      prioritySupport: currentLevelData?.prioritySupport || false,
       nextLevel: levelInfo.nextLevel,
       progress,
     });
@@ -313,14 +213,40 @@ router.get('/my-level', authenticate, async (req: Request, res: Response) => {
   }
 });
 
-// Get all fan levels
+// Get user's level perks (for applying discounts, etc.)
+router.get('/my-perks', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const perks = await getUserLevelPerks(userId);
+    res.json(perks);
+  } catch (error) {
+    console.error('Error fetching user perks:', error);
+    res.status(500).json({ error: 'Error al obtener perks' });
+  }
+});
+
+// Get all fan levels (with perk details)
 router.get('/levels', async (req: Request, res: Response) => {
   try {
     const levels = await prisma.fanLevel.findMany({
       orderBy: { level: 'asc' },
     });
 
-    res.json({ levels });
+    // Format response with full perk details
+    const formattedLevels = levels.map(level => ({
+      level: level.level,
+      name: level.name,
+      minXp: level.minXp,
+      icon: level.icon,
+      color: level.color,
+      perks: level.perks,
+      discountPercent: level.discountPercent,
+      bonusXpPercent: level.bonusXpPercent,
+      canAccessBeta: level.canAccessBeta,
+      prioritySupport: level.prioritySupport,
+    }));
+
+    res.json({ levels: formattedLevels });
   } catch (error) {
     console.error('Error fetching levels:', error);
     res.status(500).json({ error: 'Error al obtener niveles' });
