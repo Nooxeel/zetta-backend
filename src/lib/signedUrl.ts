@@ -67,24 +67,60 @@ export function signCloudinaryUrl(
   }
 
   try {
-    // Extract public_id from Cloudinary URL
-    // URL format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{folder}/{file}
-    const urlParts = originalUrl.split('/upload/')
-    if (urlParts.length < 2) {
-      return originalUrl
-    }
-
-    // Get the path after /upload/ (may include version and transformations)
-    let pathAfterUpload = urlParts[1]
-    
-    // Remove version prefix if present (v1234567890/)
-    pathAfterUpload = pathAfterUpload.replace(/^v\d+\//, '')
-    
-    // Remove file extension to get public_id
-    const publicId = pathAfterUpload.replace(/\.[^/.]+$/, '')
-
     // Determine resource type from URL
     const resourceType = originalUrl.includes('/video/') ? 'video' : 'image'
+    
+    let publicId: string
+    
+    // Check if URL already has authenticated format with signature
+    // Format: /image/authenticated/s--SIGNATURE--/v123/folder/file
+    if (originalUrl.includes('/authenticated/')) {
+      // Extract public_id from authenticated URL
+      // Remove query params first
+      const urlWithoutQuery = originalUrl.split('?')[0]
+      
+      // Find the part after the signature (s--...--/)
+      const signatureMatch = urlWithoutQuery.match(/\/s--[^/]+--\/(.+)$/)
+      if (signatureMatch) {
+        let pathAfterSig = signatureMatch[1]
+        // Remove version prefix if present (v1234567890/)
+        pathAfterSig = pathAfterSig.replace(/^v\d+\//, '')
+        // Remove file extension
+        publicId = pathAfterSig.replace(/\.[^/.]+$/, '')
+      } else {
+        // Fallback: try to get path after /authenticated/
+        const authMatch = urlWithoutQuery.match(/\/authenticated\/(.+)$/)
+        if (authMatch) {
+          let pathAfterAuth = authMatch[1]
+          // Remove signature if present
+          pathAfterAuth = pathAfterAuth.replace(/s--[^/]+--\//, '')
+          // Remove version prefix
+          pathAfterAuth = pathAfterAuth.replace(/^v\d+\//, '')
+          // Remove file extension
+          publicId = pathAfterAuth.replace(/\.[^/.]+$/, '')
+        } else {
+          return originalUrl
+        }
+      }
+    } else {
+      // Standard URL format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{folder}/{file}
+      const urlParts = originalUrl.split('/upload/')
+      if (urlParts.length < 2) {
+        return originalUrl
+      }
+
+      // Get the path after /upload/ (may include version and transformations)
+      let pathAfterUpload = urlParts[1]
+      
+      // Remove query params
+      pathAfterUpload = pathAfterUpload.split('?')[0]
+      
+      // Remove version prefix if present (v1234567890/)
+      pathAfterUpload = pathAfterUpload.replace(/^v\d+\//, '')
+      
+      // Remove file extension to get public_id
+      publicId = pathAfterUpload.replace(/\.[^/.]+$/, '')
+    }
 
     return generateSignedUrl(publicId, {
       ...options,
