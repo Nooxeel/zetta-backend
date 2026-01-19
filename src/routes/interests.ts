@@ -226,6 +226,7 @@ router.get('/creator/:username', async (req: Request, res: Response) => {
 router.get('/creator/me', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as AuthRequest).userId!
+    console.log('[INTERESTS] GET /creator/me - userId:', userId)
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -245,8 +246,15 @@ router.get('/creator/me', authenticate, async (req: Request, res: Response) => {
       }
     })
 
-    if (!user || !user.creatorProfile) {
-      return res.status(404).json({ error: 'Creator profile not found' })
+    console.log('[INTERESTS] User found:', !!user, 'Has creatorProfile:', !!user?.creatorProfile)
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // If user doesn't have a creator profile, return empty array instead of error
+    if (!user.creatorProfile) {
+      return res.json([])
     }
 
     res.json(user.creatorProfile.interests.map(ci => ci.interest))
