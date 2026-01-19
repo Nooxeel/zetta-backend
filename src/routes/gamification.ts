@@ -5,6 +5,34 @@ import { authenticate } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
+// ==================== SEED DEFAULT LEVELS ====================
+
+const DEFAULT_LEVELS = [
+  { level: 1, name: 'Novato', minXp: 0, icon: '🌱', color: '#10b981' },
+  { level: 2, name: 'Aprendiz', minXp: 100, icon: '🌿', color: '#22c55e' },
+  { level: 3, name: 'Explorador', minXp: 300, icon: '🌲', color: '#84cc16' },
+  { level: 4, name: 'Aventurero', minXp: 600, icon: '⭐', color: '#eab308' },
+  { level: 5, name: 'Experto', minXp: 1000, icon: '🌟', color: '#f59e0b' },
+  { level: 6, name: 'Maestro', minXp: 1500, icon: '💫', color: '#f97316' },
+  { level: 7, name: 'Campeón', minXp: 2500, icon: '🏆', color: '#ef4444' },
+  { level: 8, name: 'Leyenda', minXp: 4000, icon: '👑', color: '#dc2626' },
+  { level: 9, name: 'Élite', minXp: 6000, icon: '💎', color: '#a855f7' },
+  { level: 10, name: 'Mítico', minXp: 10000, icon: '🔮', color: '#8b5cf6' },
+];
+
+// Seed levels if not exist (runs once on startup)
+async function seedLevelsIfNeeded() {
+  const count = await prisma.fanLevel.count();
+  if (count === 0) {
+    console.log('Seeding default fan levels...');
+    await prisma.fanLevel.createMany({ data: DEFAULT_LEVELS });
+    console.log('Default fan levels seeded successfully');
+  }
+}
+
+// Run seed on module load
+seedLevelsIfNeeded().catch(console.error);
+
 // ==================== BADGE CHECKING LOGIC ====================
 
 interface BadgeCheckResult {
@@ -116,6 +144,17 @@ async function checkAndAwardBadges(userId: string): Promise<string[]> {
 // Calculate user level from XP
 async function calculateLevel(xp: number): Promise<{ level: number; name: string; icon: string; color: string; nextLevel: { level: number; name: string; xpNeeded: number } | null }> {
   const levels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+  
+  // If no levels exist in DB, return default level
+  if (levels.length === 0) {
+    return {
+      level: 1,
+      name: 'Novato',
+      icon: '🌱',
+      color: '#10b981',
+      nextLevel: null,
+    };
+  }
   
   let currentLevel = levels[0];
   let nextLevel = levels[1] || null;
