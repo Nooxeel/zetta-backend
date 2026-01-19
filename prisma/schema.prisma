@@ -749,11 +749,14 @@ enum InterestCategory {
 model UserPoints {
   id                String   @id @default(uuid())
   userId            String   @unique
-  points            Int      @default(1) // Users start with 1 point
+  points            Int      @default(1) // Users start with 1 point (spendable)
   totalEarned       Int      @default(1)
   totalSpent        Int      @default(0)
+  xp                Int      @default(0) // Experience points for leveling (never decreases)
+  level             Int      @default(1) // Current fan level
   lastLoginDate     DateTime @default(now())
   loginStreak       Int      @default(1)
+  longestStreak     Int      @default(1) // Best streak ever
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -762,6 +765,8 @@ model UserPoints {
   rouletteSpins     RouletteSpin[]
 
   @@index([userId])
+  @@index([xp])
+  @@index([level])
 }
 
 model PointsHistory {
@@ -789,6 +794,75 @@ model RouletteSpin {
 
   @@index([userPointsId])
   @@index([createdAt])
+}
+
+// ==================== GAMIFICATION: BADGES & LEVELS ====================
+
+// Badge definitions (static, seeded)
+model Badge {
+  id          String   @id @default(uuid())
+  code        String   @unique // 'first_tip', 'streak_7', 'top_tipper', etc.
+  name        String   // Display name
+  description String   // How to earn it
+  icon        String   // Emoji or icon name
+  category    BadgeCategory
+  rarity      BadgeRarity
+  pointsReward Int     @default(0) // Bonus points when earned
+  createdAt   DateTime @default(now())
+
+  // Users who have this badge
+  userBadges  UserBadge[]
+
+  @@index([category])
+  @@index([rarity])
+}
+
+enum BadgeCategory {
+  TIPPING      // Related to sending tips
+  STREAK       // Login streaks
+  SOCIAL       // Comments, follows
+  LOYALTY      // Subscriptions
+  MILESTONE    // Points milestones
+  SPECIAL      // Limited time or special events
+}
+
+enum BadgeRarity {
+  COMMON       // Easy to get
+  UNCOMMON     // Some effort
+  RARE         // Significant achievement
+  EPIC         // Hard to get
+  LEGENDARY    // Very rare
+}
+
+// User's earned badges
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+  notified  Boolean  @default(false) // Has user been notified?
+
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+  @@index([earnedAt])
+}
+
+// Fan Levels (calculated from XP/points)
+model FanLevel {
+  id          String   @id @default(uuid())
+  level       Int      @unique // 1, 2, 3, etc.
+  name        String   // "Novato", "Fan", "Super Fan", etc.
+  minXp       Int      // Minimum XP to reach this level
+  icon        String   // Emoji or icon
+  color       String   // Hex color for UI
+  perks       String[] // List of perks unlocked at this level
+  createdAt   DateTime @default(now())
+
+  @@index([level])
+  @@index([minXp])
 }
 
 // ==================== BLOCK SYSTEM ====================

@@ -6,6 +6,23 @@ import { authenticate } from '../middleware/auth'
 const router = express.Router()
 const logger = createLogger('Roulette')
 
+// Streak bonus configuration
+const STREAK_BONUSES: { days: number; bonus: number; badge?: string }[] = [
+  { days: 3, bonus: 5 },
+  { days: 7, bonus: 15, badge: 'streak_7' },
+  { days: 14, bonus: 30 },
+  { days: 30, bonus: 50, badge: 'streak_30' },
+  { days: 60, bonus: 100 },
+  { days: 100, bonus: 200, badge: 'streak_100' },
+]
+
+// Get streak bonus for a given streak count
+function getStreakBonus(streak: number): { bonus: number; badge?: string } | null {
+  // Find exact match for milestone
+  const milestone = STREAK_BONUSES.find(b => b.days === streak)
+  return milestone || null
+}
+
 // Prize configuration matching frontend
 const PRIZES = [
   { id: 1, label: '10 Puntos', points: 10, probability: 0.05 },
@@ -74,43 +91,118 @@ router.get('/points', authenticate, async (req: Request, res: Response): Promise
 
       if (today > lastLogin) {
         // Award daily login point
-        const newPoints = userPoints.points + 1
-        const newTotalEarned = userPoints.totalEarned + 1
         const yesterday = new Date(today)
         yesterday.setDate(yesterday.getDate() - 1)
         const isConsecutive = lastLogin.getTime() === yesterday.getTime()
         const newStreak = isConsecutive ? userPoints.loginStreak + 1 : 1
+        
+        // Calculate bonus for streak milestones
+        const streakBonus = getStreakBonus(newStreak)
+        const dailyPoints = 1
+        const bonusPoints = streakBonus?.bonus || 0
+        const totalPointsToAdd = dailyPoints + bonusPoints
 
         userPoints = await prisma.userPoints.update({
           where: { userId },
           data: {
-            points: newPoints,
-            totalEarned: newTotalEarned,
+            points: userPoints.points + totalPointsToAdd,
+            totalEarned: userPoints.totalEarned + totalPointsToAdd,
             lastLoginDate: new Date(),
             loginStreak: newStreak,
           },
         })
 
+        // Create history entry for daily login
         await prisma.pointsHistory.create({
           data: {
             userPointsId: userPoints.id,
-            amount: 1,
+            amount: dailyPoints,
             reason: `daily_login_day_${newStreak}`,
           },
         })
+        
+        // Create separate history entry for streak bonus if earned
+        if (bonusPoints > 0) {
+          await prisma.pointsHistory.create({
+            data: {
+              userPointsId: userPoints.id,
+              amount: bonusPoints,
+              reason: `streak_bonus_${newStreak}_days`,
+            },
+          })
+        }
       }
     }
 
+    // Calculate next milestone
+    const nextMilestone = STREAK_BONUSES.find(b => b.days > userPoints.loginStreak)
+    
     res.json({
       points: userPoints.points,
       totalEarned: userPoints.totalEarned,
       totalSpent: userPoints.totalSpent,
       loginStreak: userPoints.loginStreak,
       lastLoginDate: userPoints.lastLoginDate,
+      streak: {
+        current: userPoints.loginStreak,
+        nextMilestone: nextMilestone ? {
+          days: nextMilestone.days,
+          bonus: nextMilestone.bonus,
+          daysRemaining: nextMilestone.days - userPoints.loginStreak,
+        } : null,
+      },
     })
   } catch (error) {
     logger.error('Error fetching user points:', error)
     res.status(500).json({ error: 'Error fetching points' })
+  }
+})
+
+// GET /api/roulette/streak - Get detailed streak info
+router.get('/streak', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user!.userId
+
+    const userPoints = await prisma.userPoints.findUnique({
+      where: { userId },
+    })
+
+    if (!userPoints) {
+      res.json({
+        currentStreak: 0,
+        longestStreak: 0,
+        milestones: STREAK_BONUSES.map(b => ({ ...b, achieved: false })),
+        nextMilestone: STREAK_BONUSES[0],
+      })
+      return
+    }
+
+    const currentStreak = userPoints.loginStreak
+    const achievedMilestones = STREAK_BONUSES.filter(b => b.days <= currentStreak)
+    const nextMilestone = STREAK_BONUSES.find(b => b.days > currentStreak)
+
+    res.json({
+      currentStreak,
+      lastLoginDate: userPoints.lastLoginDate,
+      milestones: STREAK_BONUSES.map(b => ({
+        days: b.days,
+        bonus: b.bonus,
+        badge: b.badge,
+        achieved: b.days <= currentStreak,
+        isCurrent: b.days === currentStreak,
+      })),
+      nextMilestone: nextMilestone ? {
+        days: nextMilestone.days,
+        bonus: nextMilestone.bonus,
+        daysRemaining: nextMilestone.days - currentStreak,
+        progress: Math.round((currentStreak / nextMilestone.days) * 100),
+      } : null,
+      achievedCount: achievedMilestones.length,
+      totalBonusEarned: achievedMilestones.reduce((sum, m) => sum + m.bonus, 0),
+    })
+  } catch (error) {
+    logger.error('Error fetching streak info:', error)
+    res.status(500).json({ error: 'Error fetching streak' })
   }
 })
 

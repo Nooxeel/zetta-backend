@@ -35,6 +35,8 @@ import discoverRoutes from './routes/discover'
 import socialLinksRoutes from './routes/socialLinks'
 import subscriptionsRoutes from './routes/subscriptions'
 import rouletteRoutes from './routes/roulette'
+import leaderboardRoutes from './routes/leaderboard'
+import gamificationRoutes from './routes/gamification'
 import blockedRoutes from './routes/blocked'
 import promocodesRoutes from './routes/promocodes'
 import broadcastsRoutes from './routes/broadcasts'
@@ -170,6 +172,8 @@ app.use('/api/discover', discoverRoutes)
 app.use('/api/sociallinks', socialLinksRoutes)
 app.use('/api/subscriptions', subscriptionsRoutes)
 app.use('/api/roulette', rouletteRoutes)
+app.use('/api/leaderboard', leaderboardRoutes)
+app.use('/api/gamification', gamificationRoutes)
 app.use('/api/creator/block', blockedRoutes)
 app.use('/api/block', blockedRoutes)
 app.use('/api/promocodes', promocodesRoutes)
