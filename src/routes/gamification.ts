@@ -159,7 +159,7 @@ router.get('/badges', async (req: Request, res: Response) => {
 // Get user's badges
 router.get('/my-badges', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
 
     // Check for new badges first
     const newBadges = await checkAndAwardBadges(userId);
@@ -213,7 +213,7 @@ router.get('/my-badges', authenticate, async (req: Request, res: Response) => {
 // Get user's level info
 router.get('/my-level', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
 
     let userPoints = await prisma.userPoints.findUnique({
       where: { userId },
@@ -341,7 +341,7 @@ router.get('/user/:userId/badges', async (req: Request, res: Response) => {
 // Force check badges (useful after actions)
 router.post('/check-badges', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
     const newBadges = await checkAndAwardBadges(userId);
 
     if (newBadges.length > 0) {
