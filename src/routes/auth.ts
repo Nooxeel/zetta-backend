@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import prisma from '../lib/prisma'
 import { registerSchema, loginSchema, validateData } from '../lib/validators'
-import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
+import { authLimiter, registerLimiter, skipIfWhitelisted } from '../middleware/rateLimiter'
 import { createLogger } from '../lib/logger'
 import { applyReferralOnSignup } from '../services/referralService'
 import { setTokenCookie, clearTokenCookie, setRefreshTokenCookie, clearRefreshTokenCookie } from '../lib/cookies'
@@ -27,7 +27,7 @@ if (!JWT_SECRET) {
 }
 
 // Register new user
-router.post('/register', registerLimiter, async (req: Request, res: Response) => {
+router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request, res: Response) => {
   try {
     // Validar input con Zod
     const validation = validateData(registerSchema, req.body)

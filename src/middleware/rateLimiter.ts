@@ -3,7 +3,38 @@
  * Protege endpoints contra abuso y ataques de fuerza bruta
  */
 import rateLimit from 'express-rate-limit'
-import { Request } from 'express'
+import { Request, Response, NextFunction } from 'express'
+
+// IPs en whitelist que se saltan el rate limiting (desarrollo/admin)
+const IP_WHITELIST = new Set([
+  // IPs de desarrollo/administrador
+  '127.0.0.1',
+  '::1',
+  'localhost',
+  // Agregar IPs adicionales aquí
+  ...(process.env.RATE_LIMIT_WHITELIST?.split(',').map(ip => ip.trim()) || []),
+])
+
+/**
+ * Verifica si una IP está en la whitelist
+ */
+const isWhitelisted = (req: Request): boolean => {
+  const ip = req.ip || req.headers['x-forwarded-for'] as string || ''
+  const realIp = ip.split(',')[0].trim() // En caso de múltiples IPs en x-forwarded-for
+  return IP_WHITELIST.has(realIp)
+}
+
+/**
+ * Middleware para saltar rate limiting si la IP está en whitelist
+ */
+export const skipIfWhitelisted = (limiter: ReturnType<typeof rateLimit>) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (isWhitelisted(req)) {
+      return next()
+    }
+    return limiter(req, res, next)
+  }
+}
 
 // Opciones comunes para desactivar validaciones problemáticas
 const commonOptions = {
