@@ -785,15 +785,31 @@ model PointsHistory {
 model RouletteSpin {
   id          String   @id @default(uuid())
   userPointsId String
-  prizeId     Int      // 1-7, corresponds to prize configuration
-  prizeLabel  String   // E.g., "10 Puntos", "Jackpot! 50 Puntos"
-  pointsWon   Int      // Points won from this spin
-  createdAt   DateTime @default(now())
+  prizeId     Int      // 1-10, corresponds to prize configuration
+  prizeLabel  String   // E.g., "10 Puntos", "Suscripción Gratis"
+  prizeType   PrizeType @default(POINTS) // Type of prize won
+  pointsWon   Int      // Points won from this spin (0 for special prizes)
+  // For special prizes (subscription, discount)
+  targetCreatorUsername String? // Creator username for subscription/discount prizes
+  discountPercent       Int?    // For discount prizes (50 = 50%)
+  prizeRedeemed   Boolean  @default(false) // Whether special prize has been redeemed
+  redeemedAt      DateTime?
+  expiresAt       DateTime? // When the prize expires (null = never)
+  createdAt       DateTime @default(now())
 
   userPoints  UserPoints @relation(fields: [userPointsId], references: [id], onDelete: Cascade)
 
   @@index([userPointsId])
   @@index([createdAt])
+  @@index([prizeType, prizeRedeemed])
+}
+
+// Type of prize won in roulette
+enum PrizeType {
+  POINTS       // Regular points prize
+  SUBSCRIPTION // Free subscription to a creator
+  DISCOUNT     // Discount coupon for a subscription
+  RETRY        // "Try again" - no prize
 }
 
 // ==================== GAMIFICATION: BADGES & LEVELS ====================
