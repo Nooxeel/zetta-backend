@@ -297,6 +297,24 @@ router.get('/user/:userId/badges', async (req: Request, res: Response) => {
 
     const levelInfo = userPoints ? await calculateLevel(userPoints.xp) : null;
 
+    // Calculate progress for the public endpoint
+    let progress = null;
+    if (levelInfo && levelInfo.nextLevel) {
+      const levels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+      const currentLevelData = levels.find(l => l.level === levelInfo.level);
+      const nextLevelData = levels.find(l => l.level === levelInfo.nextLevel!.level);
+      
+      if (currentLevelData && nextLevelData && userPoints) {
+        const xpInCurrentLevel = userPoints.xp - currentLevelData.minXp;
+        const xpNeededForNext = nextLevelData.minXp - currentLevelData.minXp;
+        progress = {
+          current: xpInCurrentLevel,
+          needed: xpNeededForNext,
+          percentage: Math.min(100, Math.round((xpInCurrentLevel / xpNeededForNext) * 100)),
+        };
+      }
+    }
+
     res.json({
       badges: userBadges.map((ub) => ({
         code: ub.badge.code,
@@ -311,6 +329,7 @@ router.get('/user/:userId/badges', async (req: Request, res: Response) => {
         icon: levelInfo.icon,
         color: levelInfo.color,
       } : null,
+      progress,
       totalBadges: userBadges.length,
     });
   } catch (error) {
