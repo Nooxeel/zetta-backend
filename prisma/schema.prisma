@@ -61,6 +61,8 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   // Saved payment cards (Oneclick)
   savedCards         SavedCard[]
+  // Refresh tokens for JWT auth
+  refreshTokens      RefreshToken[]
 }
 
 // Password Reset Token
@@ -89,6 +91,24 @@ model EmailVerificationToken {
 
   @@index([token])
   @@index([userId])
+}
+
+// Refresh Token for JWT Authentication
+// Used to obtain new access tokens without re-login
+model RefreshToken {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime? // Set when token is manually revoked
+  userAgent   String?   // Browser/device info for security
+  ipAddress   String?   // IP for security tracking
+  
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // Saved Card for Oneclick Recurring Payments

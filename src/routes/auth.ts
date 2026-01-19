@@ -7,8 +7,15 @@ import { registerSchema, loginSchema, validateData } from '../lib/validators'
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter'
 import { createLogger } from '../lib/logger'
 import { applyReferralOnSignup } from '../services/referralService'
-import { setTokenCookie, clearTokenCookie } from '../lib/cookies'
+import { setTokenCookie, clearTokenCookie, setRefreshTokenCookie, clearRefreshTokenCookie } from '../lib/cookies'
 import { sendPasswordResetEmail, sendVerificationEmail, sendWelcomeEmail, isEmailConfigured } from '../services/emailService'
+import { 
+  createTokenPair, 
+  refreshAccessToken, 
+  revokeRefreshToken, 
+  revokeAllUserRefreshTokens,
+  getUserSessions
+} from '../lib/refreshToken'
 
 const router = Router()
 const logger = createLogger('Auth')
@@ -154,15 +161,21 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user.id, isCreator: user.isCreator },
-      JWT_SECRET,
-      { expiresIn: '7d' }
+    // Get client info for token tracking
+    const userAgent = req.headers['user-agent'] || 'unknown'
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
+
+    // Generate token pair (access + refresh)
+    const tokenPair = await createTokenPair(
+      user.id,
+      user.isCreator,
+      userAgent,
+      ipAddress
     )
 
-    // Set httpOnly cookie
-    setTokenCookie(res, token)
+    // Set httpOnly cookies
+    setTokenCookie(res, tokenPair.accessToken)
+    setRefreshTokenCookie(res, tokenPair.refreshToken)
 
     res.json({
       user: {
@@ -174,7 +187,8 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         isCreator: user.isCreator,
         creatorProfile: user.creatorProfile
       },
-      token // Also return token for backward compatibility
+      token: tokenPair.accessToken, // For backward compatibility
+      expiresIn: tokenPair.accessTokenExpiresIn
     })
   } catch (error) {
     logger.error('Login error:', error)
@@ -227,10 +241,106 @@ router.get('/me', async (req: Request, res: Response) => {
   }
 })
 
-// Logout - clear httpOnly cookie
-router.post('/logout', (req: Request, res: Response) => {
-  clearTokenCookie(res)
-  res.json({ message: 'Logged out successfully' })
+// Logout - clear cookies and revoke refresh token
+router.post('/logout', async (req: Request, res: Response) => {
+  try {
+    // Get refresh token from cookie
+    const refreshToken = req.cookies?.apapacho_refresh
+    
+    // Revoke the refresh token if present
+    if (refreshToken) {
+      await revokeRefreshToken(refreshToken)
+    }
+    
+    // Clear both cookies
+    clearTokenCookie(res)
+    clearRefreshTokenCookie(res)
+    
+    res.json({ message: 'Logged out successfully' })
+  } catch (error) {
+    logger.error('Logout error:', error)
+    // Still clear cookies even if revocation fails
+    clearTokenCookie(res)
+    clearRefreshTokenCookie(res)
+    res.json({ message: 'Logged out successfully' })
+  }
+})
+
+// Refresh access token
+router.post('/refresh', async (req: Request, res: Response) => {
+  try {
+    // Get refresh token from cookie or body
+    const refreshToken = req.cookies?.apapacho_refresh || req.body.refreshToken
+    
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'No refresh token provided' })
+    }
+    
+    const userAgent = req.headers['user-agent'] || 'unknown'
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
+    
+    const result = await refreshAccessToken(refreshToken, userAgent, ipAddress)
+    
+    if (!result) {
+      clearTokenCookie(res)
+      clearRefreshTokenCookie(res)
+      return res.status(401).json({ error: 'Invalid or expired refresh token' })
+    }
+    
+    // Set new access token cookie
+    setTokenCookie(res, result.accessToken)
+    
+    res.json({
+      token: result.accessToken,
+      expiresIn: result.accessTokenExpiresIn
+    })
+  } catch (error) {
+    logger.error('Refresh token error:', error)
+    res.status(500).json({ error: 'Failed to refresh token' })
+  }
+})
+
+// Logout from all devices
+router.post('/logout-all', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' })
+    }
+    
+    const token = authHeader.split(' ')[1]
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
+    
+    const count = await revokeAllUserRefreshTokens(decoded.userId)
+    
+    clearTokenCookie(res)
+    clearRefreshTokenCookie(res)
+    
+    res.json({ message: `Logged out from ${count} devices` })
+  } catch (error) {
+    logger.error('Logout all error:', error)
+    res.status(401).json({ error: 'Invalid token' })
+  }
+})
+
+// Get active sessions
+router.get('/sessions', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' })
+    }
+    
+    const token = authHeader.split(' ')[1]
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
+    
+    const sessions = await getUserSessions(decoded.userId)
+    
+    res.json(sessions)
+  } catch (error) {
+    logger.error('Get sessions error:', error)
+    res.status(401).json({ error: 'Invalid token' })
+  }
 })
 
 // ==================== PASSWORD RESET ====================

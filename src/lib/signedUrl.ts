@@ -1,0 +1,136 @@
+import { v2 as cloudinary } from 'cloudinary'
+
+/**
+ * Signed URLs for premium content protection
+ * 
+ * URLs expire after a configurable time, preventing permanent sharing
+ * Each URL is cryptographically signed and can't be modified
+ */
+
+// Default expiration: 1 hour
+const DEFAULT_EXPIRATION_SECONDS = 3600
+
+/**
+ * Generate a signed URL for a Cloudinary resource
+ * @param publicId - The public ID of the resource (e.g., 'apapacho/posts/userId/images/image-123')
+ * @param options - Configuration options
+ * @returns Signed URL with expiration
+ */
+export function generateSignedUrl(
+  publicId: string,
+  options: {
+    resourceType?: 'image' | 'video'
+    expiresInSeconds?: number
+    transformation?: object[]
+  } = {}
+): string {
+  const {
+    resourceType = 'image',
+    expiresInSeconds = DEFAULT_EXPIRATION_SECONDS,
+    transformation = []
+  } = options
+
+  // Calculate expiration timestamp
+  const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds
+
+  // Generate signed URL
+  const signedUrl = cloudinary.url(publicId, {
+    sign_url: true,
+    type: 'authenticated', // Require signature for access
+    resource_type: resourceType,
+    expires_at: expiresAt,
+    transformation,
+    secure: true // Always use HTTPS
+  })
+
+  return signedUrl
+}
+
+/**
+ * Generate a signed URL from a full Cloudinary URL
+ * Extracts public_id and generates a new signed URL
+ * 
+ * @param originalUrl - Full Cloudinary URL (e.g., https://res.cloudinary.com/...)
+ * @param options - Configuration options
+ * @returns Signed URL with expiration, or original URL if not Cloudinary
+ */
+export function signCloudinaryUrl(
+  originalUrl: string,
+  options: {
+    resourceType?: 'image' | 'video'
+    expiresInSeconds?: number
+    transformation?: object[]
+  } = {}
+): string {
+  if (!originalUrl || !originalUrl.includes('cloudinary')) {
+    return originalUrl
+  }
+
+  try {
+    // Extract public_id from Cloudinary URL
+    // URL format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{folder}/{file}
+    const urlParts = originalUrl.split('/upload/')
+    if (urlParts.length < 2) {
+      return originalUrl
+    }
+
+    // Get the path after /upload/ (may include version and transformations)
+    let pathAfterUpload = urlParts[1]
+    
+    // Remove version prefix if present (v1234567890/)
+    pathAfterUpload = pathAfterUpload.replace(/^v\d+\//, '')
+    
+    // Remove file extension to get public_id
+    const publicId = pathAfterUpload.replace(/\.[^/.]+$/, '')
+
+    // Determine resource type from URL
+    const resourceType = originalUrl.includes('/video/') ? 'video' : 'image'
+
+    return generateSignedUrl(publicId, {
+      ...options,
+      resourceType: options.resourceType || resourceType
+    })
+  } catch (error) {
+    console.error('Error signing Cloudinary URL:', error)
+    return originalUrl
+  }
+}
+
+/**
+ * Sign multiple URLs in a content array (for posts with multiple media items)
+ * 
+ * @param content - Array of content items with url and type
+ * @param expiresInSeconds - Expiration time for all URLs
+ * @returns Content array with signed URLs
+ */
+export function signContentUrls(
+  content: Array<{ url: string; type: string; [key: string]: any }>,
+  expiresInSeconds: number = DEFAULT_EXPIRATION_SECONDS
+): Array<{ url: string; type: string; [key: string]: any }> {
+  return content.map(item => {
+    if (!item.url || !item.url.includes('cloudinary')) {
+      return item
+    }
+
+    const resourceType = item.type === 'video' ? 'video' : 'image'
+    
+    return {
+      ...item,
+      url: signCloudinaryUrl(item.url, {
+        resourceType,
+        expiresInSeconds
+      })
+    }
+  })
+}
+
+/**
+ * Check if a URL is a valid signed Cloudinary URL
+ * Note: This only checks format, not cryptographic validity
+ * 
+ * @param url - URL to check
+ * @returns true if URL appears to be signed
+ */
+export function isSignedUrl(url: string): boolean {
+  return url.includes('/s--') && url.includes('--/')
+}

@@ -9,6 +9,7 @@ import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter, sanitize
 import { authenticate, optionalAuthenticate } from '../middleware/auth'
 import { io } from '../index'
 import { createLogger } from '../lib/logger'
+import { signContentUrls } from '../lib/signedUrl'
 
 const router = Router()
 const logger = createLogger('Posts')
@@ -228,9 +229,15 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
         }
       }
       
+      // Parse content and sign URLs for premium content protection
+      const parsedContent = safeJsonParse(post.content, [])
+      const signedContent = Array.isArray(parsedContent) 
+        ? signContentUrls(parsedContent, 3600) // URLs expire in 1 hour
+        : parsedContent
+      
       return {
         ...post,
-        content: safeJsonParse(post.content, []),
+        content: signedContent,
         isLocked: false
       }
     })
@@ -280,9 +287,15 @@ router.get('/:id', async (req: Request, res: Response) => {
       data: { views: post.views + 1 }
     })
 
+    // Parse content and sign URLs for premium content protection
+    const parsedContent = safeJsonParse(post.content, [])
+    const signedContent = Array.isArray(parsedContent) 
+      ? signContentUrls(parsedContent, 3600) // URLs expire in 1 hour
+      : parsedContent
+
     res.json({
       ...post,
-      content: safeJsonParse(post.content, [])
+      content: signedContent
     })
   } catch (error) {
     logger.error('Get post error:', error)
