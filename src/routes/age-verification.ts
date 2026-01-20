@@ -140,8 +140,8 @@ router.post('/verify', authenticate, async (req: AuthRequest, res: Response): Pr
   }
 })
 
-// POST /api/age-verification/confirm - Quick confirmation (for users who already verified)
-// This is for re-confirming on sensitive content
+// POST /api/age-verification/confirm - Quick confirmation (user confirms they are 18+)
+// No birthdate required - just a simple confirmation
 router.post('/confirm', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.userId
@@ -151,40 +151,29 @@ router.post('/confirm', authenticate, async (req: AuthRequest, res: Response): P
       return
     }
 
-    const user = await prisma.user.findUnique({
+    // Get IP for audit trail
+    const ip = req.headers['x-forwarded-for'] as string || 
+               req.headers['x-real-ip'] as string || 
+               req.socket?.remoteAddress || 
+               'unknown'
+
+    // Simply mark user as age verified
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
+      data: {
+        ageVerified: true,
+        ageVerifiedAt: new Date(),
+        ageVerificationIp: typeof ip === 'string' ? ip.split(',')[0].trim() : ip
+      },
       select: {
         ageVerified: true,
-        birthdate: true
+        ageVerifiedAt: true
       }
     })
 
-    if (!user) {
-      res.status(404).json({ error: 'Usuario no encontrado' })
-      return
-    }
-
-    if (!user.ageVerified || !user.birthdate) {
-      res.status(400).json({ 
-        error: 'Primero debes verificar tu edad',
-        needsVerification: true
-      })
-      return
-    }
-
-    // Verify age is still valid
-    const age = calculateAge(user.birthdate)
-    
-    if (age < MINIMUM_AGE) {
-      res.status(403).json({ 
-        error: `Debes tener al menos ${MINIMUM_AGE} años`,
-        verified: false
-      })
-      return
-    }
-
     res.json({
-      verified: true,
+      verified: updatedUser.ageVerified,
+      verifiedAt: updatedUser.ageVerifiedAt,
       message: 'Edad confirmada'
     })
   } catch (error) {

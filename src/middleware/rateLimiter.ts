@@ -83,12 +83,12 @@ export const authLimiter = rateLimit({
 
 /**
  * Rate limiter para creación de cuentas
- * Más restrictivo, 1 hora de ventana
+ * Moderado para permitir registros mientras previene abuso
  */
 export const registerLimiter = rateLimit({
   ...commonOptions,
   windowMs: 60 * 60 * 1000, // 1 hora
-  max: 3, // 3 cuentas por hora por IP
+  max: 10, // 10 cuentas por hora por IP (más permisivo para testing/demos)
   message: { 
     error: 'Demasiadas cuentas creadas desde esta IP. Por favor, intenta de nuevo en una hora.',
     retryAfter: 60 * 60
