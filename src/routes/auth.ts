@@ -28,10 +28,18 @@ if (!JWT_SECRET) {
 
 // Register new user
 router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request, res: Response) => {
+  logger.info('[REGISTER] Received registration request', { 
+    email: req.body.email, 
+    username: req.body.username,
+    isCreator: req.body.isCreator,
+    ip: req.ip 
+  })
+  
   try {
     // Validar input con Zod
     const validation = validateData(registerSchema, req.body)
     if (!validation.success) {
+      logger.warn('[REGISTER] Validation failed', { errors: validation.errors })
       return res.status(400).json({ 
         error: 'Validation failed', 
         details: validation.errors 
@@ -39,6 +47,7 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
     }
     
     const { email, username, password, displayName, isCreator, referralCode } = validation.data
+    logger.info('[REGISTER] Validation passed, checking for existing user')
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -48,9 +57,12 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
     })
 
     if (existingUser) {
+      logger.warn('[REGISTER] User already exists', { email, username })
       return res.status(400).json({ error: 'Email or username already exists' })
     }
 
+    logger.info('[REGISTER] Creating new user')
+    
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
@@ -112,6 +124,8 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
     // Set httpOnly cookie
     setTokenCookie(res, token)
 
+    logger.info('[REGISTER] Registration successful', { userId: user.id, username: user.username })
+
     res.status(201).json({
       message: 'User created successfully',
       user: {
@@ -124,7 +138,7 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
       token // Also return token for backward compatibility
     })
   } catch (error) {
-    logger.error('Register error:', error)
+    logger.error('[REGISTER] Registration failed with error:', error)
     res.status(500).json({ error: 'Failed to create user' })
   }
 })
