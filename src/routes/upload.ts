@@ -171,10 +171,15 @@ router.post('/profile', authenticate, profileUpload.single('profileImage'), asyn
     const oldValue = creator.profileImage
 
     // Update profile image and create audit log in transaction
+    // Also update user.avatar to keep them in sync
     await prisma.$transaction([
       prisma.creator.update({
         where: { id: creator.id },
         data: { profileImage: profileUrl }
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { avatar: profileUrl }
       }),
       prisma.profileAuditLog.create({
         data: {
