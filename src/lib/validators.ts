@@ -11,6 +11,7 @@ import { z } from 'zod'
 /**
  * Requisitos de contraseña:
  * - Mínimo 8 caracteres
+ * - Máximo 128 caracteres (prevenir DoS con contraseñas muy largas)
  * - Al menos una mayúscula
  * - Al menos una minúscula
  * - Al menos un número
@@ -19,6 +20,7 @@ import { z } from 'zod'
 const passwordSchema = z
   .string()
   .min(8, 'La contraseña debe tener al menos 8 caracteres')
+  .max(128, 'La contraseña no puede exceder 128 caracteres')
   .regex(/[A-Z]/, 'La contraseña debe contener al menos una mayúscula')
   .regex(/[a-z]/, 'La contraseña debe contener al menos una minúscula')
   .regex(/[0-9]/, 'La contraseña debe contener al menos un número')

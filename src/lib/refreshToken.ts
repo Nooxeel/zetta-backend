@@ -1,8 +1,16 @@
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import prisma from './prisma'
+import { createLogger } from './logger'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+const logger = createLogger('RefreshToken')
+
+// SECURITY: JWT_SECRET must be configured - no fallback allowed
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
+}
+
 const ACCESS_TOKEN_EXPIRY = '15m'  // Short-lived access token
 const REFRESH_TOKEN_EXPIRY_DAYS = 30 // Long-lived refresh token
 
@@ -74,13 +82,24 @@ export async function createTokenPair(
 }
 
 /**
+ * Refresh Token Rotation Result
+ */
+interface RefreshResult {
+  accessToken: string
+  accessTokenExpiresIn: number
+  refreshToken: string
+  refreshTokenExpiresAt: Date
+}
+
+/**
  * Refresh the access token using a valid refresh token
+ * Implements refresh token rotation: revokes old token and issues new one
  */
 export async function refreshAccessToken(
   refreshTokenString: string,
   userAgent?: string,
   ipAddress?: string
-): Promise<{ accessToken: string; accessTokenExpiresIn: number } | null> {
+): Promise<RefreshResult | null> {
   // Find the refresh token
   const refreshToken = await prisma.refreshToken.findUnique({
     where: { token: refreshTokenString },
@@ -93,8 +112,10 @@ export async function refreshAccessToken(
   }
 
   if (refreshToken.revokedAt) {
-    // Token was revoked - potential security issue
-    console.warn(`[Security] Attempted use of revoked refresh token for user ${refreshToken.userId}`)
+    // Token was revoked - potential token reuse attack!
+    // Revoke ALL tokens for this user as a security measure
+    logger.warn(`[SECURITY] Attempted reuse of revoked refresh token for user ${refreshToken.userId}. Revoking all user tokens.`)
+    await revokeAllUserRefreshTokens(refreshToken.userId)
     return null
   }
 
@@ -105,15 +126,42 @@ export async function refreshAccessToken(
     return null
   }
 
-  // Generate new access token
+  // REFRESH TOKEN ROTATION:
+  // 1. Revoke the old token
+  await prisma.refreshToken.update({
+    where: { id: refreshToken.id },
+    data: { revokedAt: new Date() }
+  })
+
+  // 2. Generate new token pair
+  const newRefreshTokenString = generateRefreshTokenString()
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS)
+
+  // 3. Store new refresh token
+  await prisma.refreshToken.create({
+    data: {
+      token: newRefreshTokenString,
+      userId: refreshToken.userId,
+      expiresAt,
+      userAgent: userAgent?.substring(0, 500),
+      ipAddress: ipAddress?.substring(0, 45),
+    }
+  })
+
+  // 4. Generate new access token
   const accessToken = generateAccessToken(
     refreshToken.userId,
     refreshToken.user.isCreator
   )
 
+  logger.debug(`Refresh token rotated for user ${refreshToken.userId}`)
+
   return {
     accessToken,
-    accessTokenExpiresIn: 15 * 60 // 15 minutes in seconds
+    accessTokenExpiresIn: 15 * 60, // 15 minutes in seconds
+    refreshToken: newRefreshTokenString,
+    refreshTokenExpiresAt: expiresAt
   }
 }
 

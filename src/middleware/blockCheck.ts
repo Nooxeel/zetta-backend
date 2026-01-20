@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import prisma from '../lib/prisma'
 import { createLogger } from '../lib/logger'
+import type { AuthRequest } from './auth'
 
 const logger = createLogger('BlockCheck')
 
@@ -85,7 +86,7 @@ export async function isAnyBlockBetweenUsers(userId1: string, userId2: string): 
 export function checkBlockedMiddleware(getCreatorId?: (req: Request) => string | Promise<string>) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = (req as any).userId
+      const userId = (req as AuthRequest).userId
       
       // Si no hay usuario autenticado, continuar (el perfil público puede ser visible)
       if (!userId) {
@@ -132,7 +133,7 @@ export function checkBlockedMiddleware(getCreatorId?: (req: Request) => string |
 export function checkBlockedByUsernameMiddleware() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = (req as any).userId
+      const userId = (req as AuthRequest).userId
       const username = req.params.username || req.params.creatorUsername
       
       // Si no hay usuario autenticado, continuar
@@ -167,3 +168,4 @@ export default {
   checkBlockedMiddleware,
   checkBlockedByUsernameMiddleware
 }
+

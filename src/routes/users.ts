@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { createLogger } from '../lib/logger'
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, getUser } from '../middleware/auth';
 import { sanitizePagination, authLimiter } from '../middleware/rateLimiter';
 import { 
   checkAccountDeletion, 
@@ -17,7 +17,7 @@ const logger = createLogger('Users');
 router.get('/search', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const { q, limit = '10' } = req.query;
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     
     if (!q || typeof q !== 'string' || q.trim().length < 2) {
       res.json({ users: [] });
@@ -60,7 +60,7 @@ router.get('/search', authenticate, async (req: Request, res: Response): Promise
 // GET /api/users/me - Obtener perfil del usuario actual
 router.get('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -96,7 +96,7 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
 // PUT /api/users/me - Actualizar perfil del usuario
 router.put('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { displayName, avatar, bio, backgroundColor, backgroundGradient, accentColor, fontFamily } = req.body;
 
     const updateData: any = {};
@@ -138,7 +138,7 @@ router.put('/me', authenticate, async (req: Request, res: Response): Promise<voi
 // GET /api/users/me/subscriptions - Obtener suscripciones activas del usuario
 router.get('/me/subscriptions', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     
     const subscriptions = await prisma.subscription.findMany({
       where: {
@@ -193,7 +193,7 @@ router.get('/me/subscriptions', authenticate, async (req: Request, res: Response
 // GET /api/users/me/stats - Obtener estadísticas del usuario
 router.get('/me/stats', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     
     const [subscriptionsCount, favoritesCount, commentsCount, donationsCount] = await Promise.all([
       prisma.subscription.count({
@@ -225,7 +225,7 @@ router.get('/me/stats', authenticate, async (req: Request, res: Response): Promi
 // GET /api/subscriptions/check/:creatorId - Verificar si el usuario está suscrito a un creador
 router.get('/subscriptions/check/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { creatorId } = req.params;
 
     const subscription = await prisma.subscription.findFirst({
@@ -246,7 +246,7 @@ router.get('/subscriptions/check/:creatorId', authenticate, async (req: Request,
 // GET /api/users/me/payments - Obtener historial de pagos del usuario
 router.get('/me/payments', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50, 20);
     
     // Obtener donaciones enviadas
@@ -351,7 +351,7 @@ router.get('/me/payments', authenticate, async (req: Request, res: Response): Pr
 // GET /api/users/me/deletion-check - Pre-check before account deletion
 router.get('/me/deletion-check', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const result = await checkAccountDeletion(userId);
     res.json(result);
   } catch (error) {
@@ -363,7 +363,7 @@ router.get('/me/deletion-check', authenticate, async (req: Request, res: Respons
 // DELETE /api/users/me - Delete user account permanently
 router.delete('/me', authenticate, authLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { password, reason } = req.body;
 
     if (!password) {
@@ -399,7 +399,7 @@ router.delete('/me', authenticate, authLimiter, async (req: Request, res: Respon
 // GET /api/users/me/export - Export all user data (GDPR)
 router.get('/me/export', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const data = await exportUserData(userId);
     
     // Set headers for download
@@ -414,3 +414,4 @@ router.get('/me/export', authenticate, async (req: Request, res: Response): Prom
 });
 
 export default router;
+

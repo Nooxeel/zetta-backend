@@ -177,7 +177,15 @@ router.get('/return', async (req: Request, res: Response) => {
       TBK_ID_SESION 
     } = req.query as Record<string, string | undefined>;
 
-    console.log('[Webpay] Return received:', { token_ws, TBK_TOKEN, TBK_ORDEN_COMPRA, TBK_ID_SESION });
+    // SECURITY: Only log in development, mask tokens
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Webpay] Return received:', { 
+        token_ws: token_ws ? `${token_ws.substring(0, 8)}...` : undefined,
+        TBK_TOKEN: TBK_TOKEN ? `${TBK_TOKEN.substring(0, 8)}...` : undefined, 
+        TBK_ORDEN_COMPRA, 
+        TBK_ID_SESION 
+      });
+    }
 
     // Check if this is an API call (from frontend fetch) or browser redirect
     const isApiCall = req.headers.accept?.includes('application/json') || 

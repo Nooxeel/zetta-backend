@@ -4,6 +4,7 @@
  */
 import rateLimit from 'express-rate-limit'
 import { Request, Response, NextFunction } from 'express'
+import type { AuthRequest } from './auth'
 
 // IPs en whitelist que se saltan el rate limiting (desarrollo/admin)
 const IP_WHITELIST = new Set([
@@ -48,7 +49,8 @@ const commonOptions = {
  */
 const createKeyGenerator = (prefix: string = '') => {
   return (req: Request): string => {
-    const userId = (req as any).userId || (req as any).user?.userId
+    const authReq = req as AuthRequest
+    const userId = authReq.userId || authReq.user?.userId
     const ip = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
     
     // Si hay userId, usar combinación de prefix + userId

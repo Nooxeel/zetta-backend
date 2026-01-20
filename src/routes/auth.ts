@@ -280,7 +280,7 @@ router.post('/logout', async (req: Request, res: Response) => {
   }
 })
 
-// Refresh access token
+// Refresh access token (with refresh token rotation)
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
     // Get refresh token from cookie or body
@@ -303,6 +303,9 @@ router.post('/refresh', async (req: Request, res: Response) => {
     
     // Set new access token cookie
     setTokenCookie(res, result.accessToken)
+    
+    // Set new refresh token cookie (rotation)
+    setRefreshTokenCookie(res, result.refreshToken)
     
     res.json({
       token: result.accessToken,

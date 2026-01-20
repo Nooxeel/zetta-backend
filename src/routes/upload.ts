@@ -1,19 +1,13 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import multer from 'multer'
-import jwt from 'jsonwebtoken'
 import path from 'path'
 import prisma from '../lib/prisma'
 import { profileImageStorage, cloudinary } from '../lib/cloudinary'
+import { authenticate, getUserId } from '../middleware/auth'
 
 const router = Router()
 const logger = createLogger('Upload')
-
-const JWT_SECRET = process.env.JWT_SECRET
-
-if (!JWT_SECRET) {
-  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
-}
 
 // SECURITY: Validate image file types by magic bytes (not just MIME type)
 const validateImageMagicBytes = (buffer: Buffer): { valid: boolean; detectedType: string | null } => {
@@ -71,7 +65,7 @@ const validateMagicBytes = (req: Request, res: Response, next: Function) => {
   const validation = validateImageMagicBytes(req.file.buffer)
   
   if (!validation.valid) {
-    logger.warn(`[Security] Invalid file magic bytes from user ${(req as any).userId}, MIME: ${req.file.mimetype}`)
+    logger.warn(`[Security] Invalid file magic bytes from user ${getUserId(req)}, MIME: ${req.file.mimetype}`)
     return res.status(400).json({ 
       error: 'Invalid file content. File signature does not match an allowed image type.' 
     })
@@ -87,25 +81,6 @@ const profileUpload = multer({
   fileFilter: imageFilter
 })
 
-// Middleware to verify JWT
-const authenticate = async (req: Request, res: Response, next: Function) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' })
-    }
-
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-    
-    ;(req as any).userId = decoded.userId
-    
-    next()
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
-
 // Upload avatar (saves to Cloudinary)
 // Cloudinary performs its own content validation, but we log for security auditing
 router.post('/avatar', authenticate, profileUpload.single('avatar'), async (req: Request, res: Response) => {
@@ -114,7 +89,7 @@ router.post('/avatar', authenticate, profileUpload.single('avatar'), async (req:
       return res.status(400).json({ error: 'No file uploaded' })
     }
 
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const cloudinaryFile = req.file as any
     const avatarUrl = cloudinaryFile.path // Cloudinary URL
 
@@ -153,7 +128,7 @@ router.post('/profile', authenticate, profileUpload.single('profileImage'), asyn
       return res.status(400).json({ error: 'No file uploaded' })
     }
 
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const profileUrl = (req.file as any).path // Cloudinary URL
 
     // Get creator profile
@@ -211,7 +186,7 @@ router.post('/cover', authenticate, profileUpload.single('coverImage'), async (r
       return res.status(400).json({ error: 'No file uploaded' })
     }
 
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const coverUrl = (req.file as any).path // Cloudinary URL
 
     // Get creator profile
@@ -266,7 +241,7 @@ router.post('/user/cover', authenticate, profileUpload.single('coverImage'), asy
       return res.status(400).json({ error: 'No file uploaded' })
     }
 
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const coverUrl = (req.file as any).path // Cloudinary URL
 
     // Update user cover image
@@ -287,3 +262,4 @@ router.post('/user/cover', authenticate, profileUpload.single('coverImage'), asy
 */
 
 export default router
+

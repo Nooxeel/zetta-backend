@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId } from '../middleware/auth'
 
 const router = Router()
 const logger = createLogger('Promocodes')
@@ -21,7 +21,7 @@ function generateCode(length = 8): string {
 // POST /api/promocodes - Crear promocode
 router.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const {
       code,
       type,
@@ -114,7 +114,7 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
 // GET /api/promocodes - Listar mis promocodes
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const page = parseInt(req.query.page as string) || 1
     const limit = parseInt(req.query.limit as string) || 20
     const status = req.query.status as string // active, expired, all
@@ -183,7 +183,7 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
 // GET /api/promocodes/:id - Obtener detalle con estadísticas
 router.get('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
 
     const creator = await prisma.creator.findUnique({
@@ -237,7 +237,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
 // PUT /api/promocodes/:id - Actualizar promocode
 router.put('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
     const { maxUses, expiresAt, isActive, applicableTiers } = req.body
 
@@ -283,7 +283,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response): Promise<vo
 // DELETE /api/promocodes/:id - Eliminar/desactivar promocode
 router.delete('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
 
     const creator = await prisma.creator.findUnique({
@@ -325,7 +325,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response): Promise
 // POST /api/promocodes/validate - Validar código (para fans)
 router.post('/validate', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { code, creatorId, tierId, amount } = req.body
 
     if (!code || !creatorId) {
@@ -470,7 +470,7 @@ router.post('/validate', authenticate, async (req: Request, res: Response): Prom
 // POST /api/promocodes/redeem - Registrar uso de código (llamado internamente al suscribirse)
 router.post('/redeem', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { promocodeId, subscriptionId, originalAmount, discountAmount, finalAmount } = req.body
 
     if (!promocodeId) {
@@ -518,3 +518,4 @@ router.post('/redeem', authenticate, async (req: Request, res: Response): Promis
 })
 
 export default router
+

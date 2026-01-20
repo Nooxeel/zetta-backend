@@ -192,7 +192,10 @@ class WebpayService {
    * This should be called when receiving token_ws in return URL
    */
   async confirmPayment(token: string): Promise<PaymentResult> {
-    console.log(`[Webpay] Confirming payment with token: ${token.substring(0, 20)}...`);
+    // SECURITY: Don't log tokens even partially in production
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Webpay] Confirming payment with token: ${token.substring(0, 8)}...`);
+    }
 
     // Find transaction by token
     const webpayTx = await prisma.webpayTransaction.findUnique({

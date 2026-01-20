@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import type { AuthRequest } from '../middleware/auth';
 
 // Configurar Cloudinary
 cloudinary.config({
@@ -12,7 +13,7 @@ cloudinary.config({
 export const profileImageStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    const userId = (req as any).userId;
+    const userId = (req as AuthRequest).userId;
     return {
       folder: `apapacho/profiles/${userId}`,
       allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
@@ -26,7 +27,7 @@ export const profileImageStorage = new CloudinaryStorage({
 export const postImageStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    const userId = (req as any).userId;
+    const userId = (req as AuthRequest).userId;
     const timestamp = Date.now();
     return {
       folder: `apapacho/posts/${userId}/images`,
@@ -41,7 +42,7 @@ export const postImageStorage = new CloudinaryStorage({
 export const postVideoStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    const userId = (req as any).userId;
+    const userId = (req as AuthRequest).userId;
     const timestamp = Date.now();
     return {
       folder: `apapacho/posts/${userId}/videos`,

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId } from '../middleware/auth'
 import { io } from '../index'
 
 const router = Router()
@@ -12,7 +12,7 @@ const logger = createLogger('Broadcasts')
 // POST /api/broadcasts - Crear y enviar broadcast
 router.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { 
       content, 
       mediaUrl, 
@@ -99,7 +99,7 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
 // GET /api/broadcasts - Listar mis broadcasts
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const page = parseInt(req.query.page as string) || 1
     const limit = parseInt(req.query.limit as string) || 20
 
@@ -141,7 +141,7 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
 // GET /api/broadcasts/:id - Detalle de broadcast
 router.get('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
 
     const creator = await prisma.creator.findUnique({
@@ -181,7 +181,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
 // DELETE /api/broadcasts/:id - Cancelar broadcast programado
 router.delete('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
 
     const creator = await prisma.creator.findUnique({
@@ -226,7 +226,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response): Promise
 // GET /api/broadcasts/stats - Estadísticas de broadcasts
 router.get('/stats/summary', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const creator = await prisma.creator.findUnique({
       where: { userId }
@@ -276,7 +276,7 @@ router.get('/stats/summary', authenticate, async (req: Request, res: Response): 
 // GET /api/broadcasts/subscribers/count - Obtener conteo de suscriptores por tipo
 router.get('/subscribers/count', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const targetType = req.query.targetType as string
     const tierIds = req.query.tierIds as string
 
@@ -533,3 +533,4 @@ async function processBroadcast(broadcastId: string, creatorId: string, creatorU
 }
 
 export default router
+

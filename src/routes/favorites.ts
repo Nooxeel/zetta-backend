@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, getUser } from '../middleware/auth';
 
 const router = Router();
 const logger = createLogger('Favorites');
@@ -9,7 +9,7 @@ const logger = createLogger('Favorites');
 // GET /api/favorites - Obtener favoritos del usuario logueado
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     
     const favorites = await prisma.favorite.findMany({
       where: { userId },
@@ -58,7 +58,7 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
 // GET /api/favorites/check/:creatorId - Verificar si un creador está en favoritos
 router.get('/check/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { creatorId } = req.params;
     
     const favorite = await prisma.favorite.findUnique({
@@ -80,7 +80,7 @@ router.get('/check/:creatorId', authenticate, async (req: Request, res: Response
 // POST /api/favorites/:creatorId - Agregar creador a favoritos
 router.post('/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { creatorId } = req.params;
     
     // Verificar que el creador existe
@@ -131,7 +131,7 @@ router.post('/:creatorId', authenticate, async (req: Request, res: Response): Pr
 // DELETE /api/favorites/:creatorId - Quitar creador de favoritos
 router.delete('/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = getUser(req).userId;
     const { creatorId } = req.params;
     
     const favorite = await prisma.favorite.findUnique({
@@ -181,3 +181,4 @@ router.get('/count/:creatorId', async (req: Request, res: Response): Promise<voi
 });
 
 export default router;
+

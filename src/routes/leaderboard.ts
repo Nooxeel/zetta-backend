@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import authenticate, { optionalAuthenticate } from '../middleware/auth'
+import authenticate, { optionalAuthenticate, getUserId, getUser } from '../middleware/auth'
 
 const router = express.Router()
 const logger = createLogger('Leaderboard')
@@ -229,7 +229,7 @@ router.get('/streaks', async (req: Request, res: Response): Promise<void> => {
 // GET /api/leaderboard/my-rank - Get current user's ranks
 router.get('/my-rank', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
     const days = parseInt(req.query.days as string) || 30
     
     const startDate = new Date()
@@ -301,3 +301,4 @@ router.get('/my-rank', authenticate, async (req: Request, res: Response): Promis
 })
 
 export default router
+

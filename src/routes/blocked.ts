@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId } from '../middleware/auth'
 
 const router = Router()
 const logger = createLogger('Blocked')
@@ -9,7 +9,7 @@ const logger = createLogger('Blocked')
 // POST /api/creator/block/:userId - Bloquear un usuario
 router.post('/:userId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const creatorUserId = (req as any).userId
+    const creatorUserId = getUserId(req)
     const { userId: targetUserId } = req.params
     const { reason } = req.body
 
@@ -122,7 +122,7 @@ router.post('/:userId', authenticate, async (req: Request, res: Response): Promi
 // DELETE /api/creator/block/:userId - Desbloquear un usuario
 router.delete('/:userId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const creatorUserId = (req as any).userId
+    const creatorUserId = getUserId(req)
     const { userId: targetUserId } = req.params
 
     // Verificar que el usuario autenticado es creador
@@ -184,7 +184,7 @@ router.delete('/:userId', authenticate, async (req: Request, res: Response): Pro
 // GET /api/creator/blocked - Listar usuarios bloqueados
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const creatorUserId = (req as any).userId
+    const creatorUserId = getUserId(req)
     const page = parseInt(req.query.page as string) || 1
     const limit = parseInt(req.query.limit as string) || 20
 
@@ -243,7 +243,7 @@ router.get('/', authenticate, async (req: Request, res: Response): Promise<void>
 // GET /api/creator/block/check/:userId - Verificar si un usuario está bloqueado
 router.get('/check/:userId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const creatorUserId = (req as any).userId
+    const creatorUserId = getUserId(req)
     const { userId: targetUserId } = req.params
 
     // Verificar que el usuario autenticado es creador
@@ -279,7 +279,7 @@ router.get('/check/:userId', authenticate, async (req: Request, res: Response): 
 // GET /api/block/am-i-blocked/:creatorUsername - Verificar si estoy bloqueado por un creador (para fans)
 router.get('/am-i-blocked/:creatorUsername', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { creatorUsername } = req.params
 
     // Buscar el creador por username
@@ -313,3 +313,4 @@ router.get('/am-i-blocked/:creatorUsername', authenticate, async (req: Request, 
 })
 
 export default router
+

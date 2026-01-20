@@ -6,7 +6,7 @@ import prisma from '../lib/prisma'
 import { postImageStorage, postVideoStorage } from '../lib/cloudinary'
 import { sanitizePost, sanitizeComment } from '../lib/sanitize'
 import { createPostLimiter, uploadLimiter, likeLimiter, commentLimiter, sanitizePagination } from '../middleware/rateLimiter'
-import { authenticate, optionalAuthenticate } from '../middleware/auth'
+import { authenticate, optionalAuthenticate, getUserId } from '../middleware/auth'
 import { io } from '../index'
 import { createLogger } from '../lib/logger'
 import { signContentUrls } from '../lib/signedUrl'
@@ -122,7 +122,7 @@ const uploadImage = multer({
 // GET /api/posts/my-posts - Obtener posts del creador autenticado
 router.get('/my-posts', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     // Verificar que el usuario es creador
     const creator = await prisma.creator.findUnique({
@@ -170,7 +170,7 @@ router.get('/my-posts', authenticate, async (req: Request, res: Response) => {
 // SECURITY: Filters subscriber-only content based on authentication
 router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId || null
+    const userId = getUserId(req) || null
     const { creatorId, visibility, cursor, limit = '10' } = req.query
 
     const where: any = {}
@@ -306,7 +306,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/posts - Crear nuevo post
 router.post('/', createPostLimiter, authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { title, description, content, visibility, price, requiredTierId } = req.body
 
     logger.debug('[CREATE POST] User:', userId)
@@ -409,7 +409,7 @@ router.post('/upload-image', uploadLimiter, authenticate, uploadImage.single('im
 // PUT /api/posts/:id - Actualizar post
 router.put('/:id', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
     const { title, description, content, visibility, price, requiredTierId } = req.body
 
@@ -481,7 +481,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
 // DELETE /api/posts/:id - Eliminar post
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
 
     // Verificar que el post existe y pertenece al usuario
@@ -528,7 +528,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
 // POST /api/posts/:id/like - Toggle like on a post
 router.post('/:id/like', likeLimiter, authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id: postId } = req.params
 
     // Verificar que el post existe
@@ -625,7 +625,7 @@ router.post('/:id/like', likeLimiter, authenticate, async (req: Request, res: Re
 // GET /api/posts/:id/like-status - Check if current user liked a post
 router.get('/:id/like-status', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id: postId } = req.params
 
     const like = await prisma.postLike.findUnique({
@@ -649,7 +649,7 @@ router.get('/:id/like-status', authenticate, async (req: Request, res: Response)
 // GET /api/posts/like-status/batch?postIds=id1,id2,id3 - Check like status for multiple posts (fixes N+1)
 router.get('/like-status/batch', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { postIds } = req.query
 
     if (!postIds || typeof postIds !== 'string') {
@@ -739,7 +739,7 @@ router.get('/:id/comments', async (req: Request, res: Response) => {
 // POST /api/posts/:id/comments - Create a comment
 router.post('/:id/comments', commentLimiter, authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id: postId } = req.params
     const { content } = req.body
 
@@ -795,7 +795,7 @@ router.post('/:id/comments', commentLimiter, authenticate, async (req: Request, 
 // DELETE /api/posts/comments/:commentId - Delete a comment
 router.delete('/comments/:commentId', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { commentId } = req.params
 
     // Buscar el comentario
@@ -842,3 +842,4 @@ router.delete('/comments/:commentId', authenticate, async (req: Request, res: Re
 })
 
 export default router
+

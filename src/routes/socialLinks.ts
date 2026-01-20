@@ -1,33 +1,8 @@
 import { Router, Request, Response } from 'express'
-import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma'
+import { authenticate, getUserId } from '../middleware/auth'
 
 const router = Router()
-
-const JWT_SECRET = process.env.JWT_SECRET
-
-if (!JWT_SECRET) {
-  throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set.')
-}
-
-// Middleware to verify JWT
-const authenticate = async (req: Request, res: Response, next: Function) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' })
-    }
-
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-
-    ;(req as any).userId = decoded.userId
-
-    next()
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' })
-  }
-}
 
 // Plataformas predefinidas con sus iconos
 const PLATFORM_ICONS: Record<string, string> = {
@@ -86,7 +61,7 @@ router.get('/:creatorUsername', async (req: Request, res: Response): Promise<voi
 // GET /api/sociallinks/me/all - Obtener todos los links del creador autenticado
 router.get('/me/all', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const creator = await prisma.creator.findUnique({
       where: { userId },
@@ -112,7 +87,7 @@ router.get('/me/all', authenticate, async (req: Request, res: Response): Promise
 // POST /api/sociallinks - Crear nuevo link
 router.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { platform, url, label, icon } = req.body
 
     // Validaciones
@@ -177,7 +152,7 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
 // PUT /api/sociallinks/:id - Actualizar link
 router.put('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
     const { platform, url, label, icon, isVisible } = req.body
 
@@ -232,7 +207,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response): Promise<vo
 // PUT /api/sociallinks/reorder - Reordenar links
 router.put('/reorder/batch', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { linkIds } = req.body // Array de IDs en el nuevo orden
 
     if (!Array.isArray(linkIds)) {
@@ -290,7 +265,7 @@ router.put('/reorder/batch', authenticate, async (req: Request, res: Response): 
 // DELETE /api/sociallinks/:id - Eliminar link
 router.delete('/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { id } = req.params
 
     const creator = await prisma.creator.findUnique({
@@ -334,3 +309,4 @@ router.get('/platforms/list', (req: Request, res: Response): void => {
 })
 
 export default router
+

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId } from '../middleware/auth'
 import { WatermarkSettings, getDefaultWatermarkSettings, applyWatermark } from '../lib/watermark'
 
 const router = Router()
@@ -10,7 +10,7 @@ const logger = createLogger('Watermark')
 // GET /api/watermark/settings - Obtener configuración de watermark del creador
 router.get('/settings', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const creator = await prisma.creator.findUnique({
       where: { userId },
@@ -34,7 +34,7 @@ router.get('/settings', authenticate, async (req: Request, res: Response): Promi
 // PUT /api/watermark/settings - Actualizar configuración de watermark
 router.put('/settings', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { enabled, text, position, opacity, size } = req.body
 
     const creator = await prisma.creator.findUnique({
@@ -133,7 +133,7 @@ router.post('/apply', async (req: Request, res: Response): Promise<void> => {
 // POST /api/watermark/preview - Previsualizar watermark en una URL de ejemplo
 router.post('/preview', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { settings: previewSettings, sampleUrl } = req.body
 
     const creator = await prisma.creator.findUnique({
@@ -172,3 +172,4 @@ router.post('/preview', authenticate, async (req: Request, res: Response): Promi
 })
 
 export default router
+

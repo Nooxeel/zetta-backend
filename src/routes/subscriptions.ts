@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId } from '../middleware/auth'
 
 const router = Router()
 const logger = createLogger('Subscriptions')
@@ -29,7 +29,7 @@ router.get('/tiers/:creatorId', async (req: Request, res: Response): Promise<voi
 // GET /api/subscriptions/my-tiers - Obtener mis tiers (creador autenticado)
 router.get('/my-tiers', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     // Verificar que es creador
     const creator = await prisma.creator.findUnique({
@@ -56,7 +56,7 @@ router.get('/my-tiers', authenticate, async (req: Request, res: Response): Promi
 // POST /api/subscriptions/tiers - Crear tier (creador autenticado)
 router.post('/tiers', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { name, description, price, currency, benefits, durationDays } = req.body
 
     // Validar campos requeridos
@@ -116,7 +116,7 @@ router.post('/tiers', authenticate, async (req: Request, res: Response): Promise
 // PUT /api/subscriptions/tiers/:tierId - Actualizar tier
 router.put('/tiers/:tierId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { tierId } = req.params
     const { name, description, price, currency, benefits, isActive, durationDays } = req.body
 
@@ -171,7 +171,7 @@ router.put('/tiers/:tierId', authenticate, async (req: Request, res: Response): 
 // DELETE /api/subscriptions/tiers/:tierId - Eliminar tier
 router.delete('/tiers/:tierId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { tierId } = req.params
 
     // Verificar que es creador
@@ -221,7 +221,7 @@ router.delete('/tiers/:tierId', authenticate, async (req: Request, res: Response
 // GET /api/subscriptions/my-subscriptions - Mis suscripciones como fan
 router.get('/my-subscriptions', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const subscriptions = await prisma.subscription.findMany({
       where: {
@@ -255,7 +255,7 @@ router.get('/my-subscriptions', authenticate, async (req: Request, res: Response
 // GET /api/subscriptions/check/:creatorId - Verificar si estoy suscrito a un creador
 router.get('/check/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { creatorId } = req.params
 
     const subscription = await prisma.subscription.findFirst({
@@ -288,7 +288,7 @@ router.get('/check/:creatorId', authenticate, async (req: Request, res: Response
 // POST /api/subscriptions/subscribe - Suscribirse a un creador (por ahora simulado)
 router.post('/subscribe', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { creatorId, tierId } = req.body
 
     if (!creatorId || !tierId) {
@@ -512,7 +512,7 @@ router.post('/subscribe', authenticate, async (req: Request, res: Response): Pro
 // POST /api/subscriptions/unsubscribe/:creatorId - Cancelar suscripción
 router.post('/unsubscribe/:creatorId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { creatorId } = req.params
 
     const subscription = await prisma.subscription.findFirst({
@@ -546,7 +546,7 @@ router.post('/unsubscribe/:creatorId', authenticate, async (req: Request, res: R
 // GET /api/subscriptions/subscribers - Mis suscriptores (como creador)
 router.get('/subscribers', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const creator = await prisma.creator.findUnique({
       where: { userId }
@@ -584,3 +584,4 @@ router.get('/subscribers', authenticate, async (req: Request, res: Response): Pr
 })
 
 export default router
+

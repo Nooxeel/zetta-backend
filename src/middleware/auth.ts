@@ -20,6 +20,21 @@ export interface AuthRequest extends Request {
 }
 
 /**
+ * Helper para obtener userId de forma type-safe
+ * Usar después de authenticate middleware
+ */
+export function getUserId(req: Request): string {
+  return (req as AuthRequest).userId!;
+}
+
+/**
+ * Helper para obtener user info de forma type-safe
+ */
+export function getUser(req: Request): { userId: string; isCreator?: boolean } {
+  return (req as AuthRequest).user!;
+}
+
+/**
  * Extract token from request (header or cookie)
  */
 function getTokenFromRequest(req: Request): string | null {

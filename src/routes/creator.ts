@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { sanitizeCreatorProfile } from '../lib/sanitize'
-import { authenticate, optionalAuthenticate } from '../middleware/auth'
+import { authenticate, optionalAuthenticate, getUserId } from '../middleware/auth'
 import { creatorCache } from '../lib/cache'
 import { createLogger } from '../lib/logger'
 import { isUserBlockedByUsername } from '../middleware/blockCheck'
@@ -106,7 +106,7 @@ async function buildCreatorResponse(username: string) {
 router.get('/username/:username', publicProfileLimiter, optionalAuthenticate, async (req: Request, res: Response) => {
   try {
     const { username } = req.params
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     // Verificar si el usuario está bloqueado por este creador
     if (userId) {
@@ -150,7 +150,7 @@ router.get('/username/:username', publicProfileLimiter, optionalAuthenticate, as
 // NOTE: This route must be before /:id to avoid being captured
 router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { take, skip } = sanitizePagination(req.query.limit as string, req.query.offset as string, 50)
 
     const creator = await prisma.creator.findUnique({
@@ -188,7 +188,7 @@ router.get('/audit-logs', authenticate, async (req: Request, res: Response) => {
 // NOTE: This route must be before /:id to avoid being captured
 router.get('/profile', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     logger.debug('Searching creator for userId:', userId)
 
     const creator = await prisma.creator.findUnique({
@@ -264,7 +264,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Update creator profile (authenticated) - JSON only, images use /upload endpoints
 router.put('/profile', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     
     const {
       bio,
@@ -405,7 +405,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
 // Add music track
 router.post('/music', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { youtubeUrl, youtubeId, title, artist, thumbnail } = req.body
 
     const creator = await prisma.creator.findUnique({
@@ -451,7 +451,7 @@ router.post('/music', authenticate, async (req: Request, res: Response) => {
 // Delete music track
 router.delete('/music/:trackId', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { trackId } = req.params
 
     const creator = await prisma.creator.findUnique({
@@ -555,3 +555,4 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
 })
 
 export default router
+

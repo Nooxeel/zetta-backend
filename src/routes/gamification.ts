@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticate } from '../middleware/auth';
+import { authenticate, getUserId, getUser } from '../middleware/auth';
 import { 
   checkAndAwardBadges as checkAchievements, 
   getUserLevelPerks,
@@ -94,7 +94,7 @@ router.get('/badges', async (req: Request, res: Response) => {
 // Get user's badges
 router.get('/my-badges', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = getUserId(req);
 
     // Check for new badges first
     const newBadges = await checkAndAwardBadges(userId);
@@ -148,7 +148,7 @@ router.get('/my-badges', authenticate, async (req: Request, res: Response) => {
 // Get user's level info
 router.get('/my-level', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = getUserId(req);
 
     let userPoints = await prisma.userPoints.findUnique({
       where: { userId },
@@ -216,7 +216,7 @@ router.get('/my-level', authenticate, async (req: Request, res: Response) => {
 // Get user's level perks (for applying discounts, etc.)
 router.get('/my-perks', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = getUserId(req);
     const perks = await getUserLevelPerks(userId);
     res.json(perks);
   } catch (error) {
@@ -315,7 +315,7 @@ router.get('/user/:userId/badges', async (req: Request, res: Response) => {
 // Force check badges (useful after actions)
 router.post('/check-badges', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = getUserId(req);
     const newBadges = await checkAndAwardBadges(userId);
 
     if (newBadges.length > 0) {
@@ -344,7 +344,7 @@ router.post('/check-badges', authenticate, async (req: Request, res: Response) =
 // Award special badge (admin only - for manual awards)
 router.post('/award/:userId/:badgeCode', authenticate, async (req: Request, res: Response) => {
   try {
-    const requestingUser = (req as any).user;
+    const requestingUser = getUser(req);
     const { userId, badgeCode } = req.params;
 
     // TODO: Add admin check
@@ -379,3 +379,4 @@ export default router;
 
 // Export helper functions for use in other routes
 export { checkAndAwardBadges, calculateLevel };
+

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId } from '../middleware/auth'
 import { messageLimiter } from '../middleware/rateLimiter'
 import { isAnyBlockBetweenUsers } from '../middleware/blockCheck'
 import { io } from '../index'
@@ -12,7 +12,7 @@ const logger = createLogger('Messages')
 // Get all conversations for current user
 router.get('/conversations', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const conversations = await prisma.conversation.findMany({
       where: {
@@ -83,7 +83,7 @@ router.get('/conversations', authenticate, async (req: Request, res: Response) =
 // Get or create conversation with a user
 router.post('/conversations', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { recipientId } = req.body
 
     if (!recipientId) {
@@ -185,7 +185,7 @@ router.post('/conversations', authenticate, async (req: Request, res: Response) 
 // Get messages in a conversation
 router.get('/conversations/:conversationId/messages', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { conversationId } = req.params
     const { cursor, limit = '50' } = req.query
 
@@ -272,7 +272,7 @@ router.get('/conversations/:conversationId/messages', authenticate, async (req: 
 // Send a message
 router.post('/conversations/:conversationId/messages', messageLimiter, authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { conversationId } = req.params
     const { content, type = 'TEXT', price } = req.body
 
@@ -387,7 +387,7 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
 // Get total unread count
 router.get('/unread-count', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
 
     const conversations = await prisma.conversation.findMany({
       where: {
@@ -419,7 +419,7 @@ router.get('/unread-count', authenticate, async (req: Request, res: Response) =>
 // Delete a message (soft delete)
 router.delete('/messages/:messageId', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { messageId } = req.params
 
     const message = await prisma.message.findUnique({
@@ -449,7 +449,7 @@ router.delete('/messages/:messageId', authenticate, async (req: Request, res: Re
 // Archive/block conversation
 router.patch('/conversations/:conversationId/status', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId
+    const userId = getUserId(req)
     const { conversationId } = req.params
     const { status } = req.body // 'active', 'archived', 'blocked'
 
@@ -482,3 +482,4 @@ router.patch('/conversations/:conversationId/status', authenticate, async (req: 
 })
 
 export default router
+

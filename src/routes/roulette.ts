@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
-import { authenticate } from '../middleware/auth'
+import { authenticate, getUserId, getUser } from '../middleware/auth'
 import { PrizeType } from '@prisma/client'
 
 const router = express.Router()
@@ -71,7 +71,7 @@ function selectPrize() {
 // GET /api/roulette/points - Get user points
 router.get('/points', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
 
     let userPoints = await prisma.userPoints.findUnique({
       where: { userId },
@@ -177,7 +177,7 @@ router.get('/points', authenticate, async (req: Request, res: Response): Promise
 // GET /api/roulette/streak - Get detailed streak info
 router.get('/streak', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
 
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId },
@@ -225,7 +225,7 @@ router.get('/streak', authenticate, async (req: Request, res: Response): Promise
 // POST /api/roulette/spin - Spin the roulette
 router.post('/spin', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
 
     // Get user points
     const userPoints = await prisma.userPoints.findUnique({
@@ -345,7 +345,7 @@ router.post('/spin', authenticate, async (req: Request, res: Response): Promise<
 // GET /api/roulette/history - Get spin history
 router.get('/history', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
 
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId },
@@ -378,7 +378,7 @@ router.get('/history', authenticate, async (req: Request, res: Response): Promis
 // GET /api/roulette/prizes - Get unredeemed special prizes
 router.get('/prizes', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
 
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId },
@@ -423,7 +423,7 @@ router.get('/prizes', authenticate, async (req: Request, res: Response): Promise
 // POST /api/roulette/redeem/:spinId - Redeem a special prize
 router.post('/redeem/:spinId', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user!.userId
+    const userId = getUser(req).userId
     const { spinId } = req.params
     const { creatorUsername } = req.body // For flexible discount coupons
 
@@ -585,3 +585,4 @@ router.post('/redeem/:spinId', authenticate, async (req: Request, res: Response)
 })
 
 export default router
+
