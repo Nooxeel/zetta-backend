@@ -6,10 +6,10 @@ import { createLogger } from './logger'
 const logger = createLogger('RefreshToken')
 
 // SECURITY: JWT_SECRET must be configured - no fallback allowed
-const JWT_SECRET = process.env.JWT_SECRET
-if (!JWT_SECRET) {
+if (!process.env.JWT_SECRET) {
   throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not set. Application cannot start without it.')
 }
+const JWT_SECRET: string = process.env.JWT_SECRET
 
 const ACCESS_TOKEN_EXPIRY = '15m'  // Short-lived access token
 const REFRESH_TOKEN_EXPIRY_DAYS = 30 // Long-lived refresh token
