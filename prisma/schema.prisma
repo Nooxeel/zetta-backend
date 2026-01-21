@@ -1245,6 +1245,7 @@ model WebpayTransaction {
   subscriptionTierId String?             // If paying for subscription
   creatorId          String?             // Creator receiving payment
   donationMessage    String?             // If it's a donation with message
+  postId             String?             // If paying for PPV content
   
   // Webpay specific fields
   token             String?              @unique // Token from Webpay

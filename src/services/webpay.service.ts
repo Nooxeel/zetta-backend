@@ -67,6 +67,7 @@ export interface CreatePaymentParams {
   subscriptionTierId?: string;
   creatorId?: string;
   donationMessage?: string;
+  postId?: string; // For PPV content purchases
 }
 
 export interface PaymentResult {
@@ -122,7 +123,7 @@ class WebpayService {
     buyOrder: string;
     transactionId: string;
   }> {
-    const { userId, amount, paymentType, returnUrl, subscriptionTierId, creatorId, donationMessage } = params;
+    const { userId, amount, paymentType, returnUrl, subscriptionTierId, creatorId, donationMessage, postId } = params;
 
     // Validate amount (must be positive integer in CLP)
     if (!Number.isInteger(amount) || amount <= 0) {
@@ -132,7 +133,7 @@ class WebpayService {
     const buyOrder = this.generateBuyOrder();
     const sessionId = this.generateSessionId(userId);
 
-    console.log(`[Webpay] Creating payment: ${buyOrder} for ${amount} CLP`);
+    console.log(`[Webpay] Creating payment: ${buyOrder} for ${amount} CLP, type: ${paymentType}`);
 
     // Create record in database first
     const webpayTx = await prisma.webpayTransaction.create({
@@ -145,6 +146,7 @@ class WebpayService {
         subscriptionTierId,
         creatorId,
         donationMessage,
+        postId,
         returnUrl,
         status: 'PENDING',
       },
@@ -271,6 +273,17 @@ class WebpayService {
           webpayTx.id,
           webpayTx.buyOrder,
           webpayTx.donationMessage
+        );
+      }
+
+      // If authorized and it's a content purchase (PPV), record the purchase
+      if (isAuthorized && webpayTx.paymentType === 'CONTENT' && webpayTx.postId) {
+        await this.recordContentPurchase(
+          webpayTx.userId,
+          webpayTx.postId,
+          webpayTx.amount,
+          webpayTx.id,
+          webpayTx.buyOrder
         );
       }
 
@@ -676,6 +689,131 @@ class WebpayService {
 
     console.log(`[Webpay] Donation recorded: ${amount} CLP from ${fromUserId} to creator ${creatorId}`);
     console.log(`[Webpay] Transaction: gross=${amount}, platform=${platformFeeAmount}, creator=${creatorPayableAmount}`);
+  }
+
+  /**
+   * Record content purchase (PPV) after successful payment
+   */
+  private async recordContentPurchase(
+    userId: string,
+    postId: string,
+    amount: number,
+    webpayTxId: string,
+    buyOrder: string
+  ): Promise<void> {
+    // Calculate platform fee (15% for content) and creator earnings
+    const platformFeeRate = 0.15;
+    const platformFee = Math.round(amount * platformFeeRate);
+    const creatorEarnings = amount - platformFee;
+
+    // Get the post to find the creator
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: { creator: true }
+    });
+
+    if (!post) {
+      throw new Error(`Post ${postId} not found for content purchase`);
+    }
+
+    // Get current fee schedule
+    let feeSchedule = await prisma.feeSchedule.findFirst({
+      orderBy: { effectiveFrom: 'desc' },
+    });
+
+    if (!feeSchedule) {
+      feeSchedule = await prisma.feeSchedule.create({
+        data: {
+          effectiveFrom: new Date(),
+          standardPlatformFeeBps: 1500, // 15% for content
+          vipPlatformFeeBps: 1000,
+          holdDays: 7,
+          minPayoutClp: BigInt(20000),
+          payoutFrequency: 'WEEKLY',
+          description: 'Default fee schedule for content',
+        },
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Create or update ContentPurchase record
+      await tx.contentPurchase.upsert({
+        where: {
+          postId_userId: { postId, userId }
+        },
+        create: {
+          postId,
+          userId,
+          amount,
+          currency: 'CLP',
+          platformFee,
+          creatorEarnings,
+          status: 'completed'
+        },
+        update: {
+          amount,
+          platformFee,
+          creatorEarnings,
+          status: 'completed'
+        }
+      });
+
+      // 2. Create Transaction record for earnings tracking
+      const transaction = await tx.transaction.create({
+        data: {
+          creatorId: post.creatorId,
+          fanUserId: userId,
+          productType: ProductType.CONTENT,
+          currency: 'CLP',
+          grossAmount: BigInt(amount),
+          appliedFeeScheduleId: feeSchedule!.id,
+          appliedPlatformFeeBps: 1500, // 15%
+          platformFeeAmount: BigInt(platformFee),
+          creatorPayableAmount: BigInt(creatorEarnings),
+          status: TransactionStatus.SUCCEEDED,
+          provider: 'WEBPAY',
+          providerPaymentId: webpayTxId,
+          providerEventId: buyOrder,
+          metadata: {
+            postId,
+            postTitle: post.title || 'PPV Content'
+          },
+        },
+      });
+
+      // 3. Create ledger entries
+      try {
+        await createTransactionLedgerEntries(
+          tx,
+          transaction.id,
+          BigInt(amount),
+          BigInt(platformFee),
+          BigInt(creatorEarnings),
+          post.creatorId
+        );
+      } catch (ledgerError) {
+        console.warn('[Webpay] Could not create ledger entries for content purchase:', ledgerError);
+      }
+
+      // 4. Process referral commission if applicable
+      try {
+        const referralResult = await processReferralCommission(
+          tx,
+          userId,
+          BigInt(platformFee),
+          'purchase',
+          transaction.id
+        );
+        if (referralResult.processed) {
+          console.log(`[Webpay] Referral commission for content purchase: ${referralResult.commissionAmount} CLP`);
+        }
+      } catch (referralError) {
+        console.warn('[Webpay] Could not process referral commission for content purchase:', referralError);
+      }
+    });
+
+    console.log(`[Webpay] Content purchase recorded: ${amount} CLP from user ${userId} for post ${postId}`);
+    console.log(`[Webpay] Transaction: gross=${amount}, platform=${platformFee}, creator=${creatorEarnings}`);
   }
 }
 

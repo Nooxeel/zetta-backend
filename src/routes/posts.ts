@@ -932,7 +932,7 @@ router.get('/:postId/purchase-status', authenticate, async (req: Request, res: R
   }
 })
 
-// POST /api/posts/:postId/purchase - Initiate purchase of PPV content
+// POST /api/posts/:postId/purchase - Initiate purchase of PPV content via Webpay
 router.post('/:postId/purchase', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req)
@@ -981,33 +981,20 @@ router.post('/:postId/purchase', authenticate, async (req: Request, res: Respons
       return res.status(400).json({ error: 'You have already purchased this content' })
     }
 
-    // Calculate fees (15% platform fee)
-    const platformFeeRate = 0.15
-    const platformFee = Math.round(post.price * platformFeeRate)
-    const creatorEarnings = post.price - platformFee
-
-    // For now, create a completed purchase directly
-    // TODO: Integrate with Webpay for actual payment processing
-    const purchase = await prisma.contentPurchase.create({
-      data: {
-        postId,
-        userId,
-        amount: post.price,
-        currency: 'CLP',
-        platformFee,
-        creatorEarnings,
-        status: 'completed'
-      }
-    })
-
-    logger.info(`[PPV] User ${userId} purchased post ${postId} for $${post.price} CLP`)
+    // Return payment information for Webpay
+    // The frontend will use this to call /api/payments/webpay/create
+    logger.info(`[PPV] User ${userId} initiating purchase for post ${postId} - $${post.price} CLP`)
 
     res.json({
       success: true,
-      purchase: {
-        id: purchase.id,
-        amount: purchase.amount,
-        createdAt: purchase.createdAt
+      requiresPayment: true,
+      paymentInfo: {
+        amount: post.price,
+        paymentType: 'CONTENT',
+        creatorId: post.creatorId,
+        postId: postId,
+        creatorUsername: post.creator.user.username,
+        postTitle: post.title || 'Contenido PPV'
       }
     })
   } catch (error) {

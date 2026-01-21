@@ -65,7 +65,7 @@ const authMiddleware = async (req: AuthRequest, res: Response, next: Function) =
 router.post('/create', paymentLimiter, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { amount, paymentType, subscriptionTierId, creatorId, donationMessage } = req.body;
+    const { amount, paymentType, subscriptionTierId, creatorId, donationMessage, postId } = req.body;
 
     // Validate required fields
     if (!amount || !paymentType) {
@@ -118,6 +118,41 @@ router.post('/create', paymentLimiter, authMiddleware, async (req: AuthRequest, 
       }
     }
 
+    // For content purchases, validate post exists and is PPV
+    if (paymentType === 'CONTENT') {
+      if (!postId) {
+        return res.status(400).json({ error: 'Para compra de contenido se requiere postId' });
+      }
+
+      const post = await prisma.post.findUnique({
+        where: { id: postId },
+        include: { creator: true }
+      });
+
+      if (!post) {
+        return res.status(404).json({ error: 'Contenido no encontrado' });
+      }
+
+      if (post.visibility !== 'ppv') {
+        return res.status(400).json({ error: 'Este contenido no es de pago' });
+      }
+
+      if (post.price !== amount) {
+        return res.status(400).json({ 
+          error: `El monto (${amount}) no coincide con el precio del contenido (${post.price})` 
+        });
+      }
+
+      // Check if already purchased
+      const existingPurchase = await prisma.contentPurchase.findUnique({
+        where: { postId_userId: { postId, userId } }
+      });
+
+      if (existingPurchase?.status === 'completed') {
+        return res.status(400).json({ error: 'Ya has comprado este contenido' });
+      }
+    }
+
     // Build return URL (frontend will handle the result)
     const returnUrl = `${FRONTEND_URL}/payments/result`;
 
@@ -130,6 +165,7 @@ router.post('/create', paymentLimiter, authMiddleware, async (req: AuthRequest, 
       subscriptionTierId,
       creatorId,
       donationMessage,
+      postId,
     });
 
     res.json({
