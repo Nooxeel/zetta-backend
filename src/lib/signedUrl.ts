@@ -136,29 +136,25 @@ export function signCloudinaryUrl(
 /**
  * Sign multiple URLs in a content array (for posts with multiple media items)
  * 
+ * NOTE: URL signing is currently disabled because Cloudinary images are uploaded
+ * with type 'upload' (public). Signed URLs with expiration only work with 
+ * type 'authenticated'. For now, we return original URLs.
+ * 
+ * TODO: To enable true URL protection:
+ * 1. Change CloudinaryStorage to use access_mode: 'authenticated'
+ * 2. Re-enable URL signing
+ * 
  * @param content - Array of content items with url and type
- * @param expiresInSeconds - Expiration time for all URLs
- * @returns Content array with signed URLs
+ * @param expiresInSeconds - Expiration time for all URLs (currently unused)
+ * @returns Content array with URLs (unchanged for now)
  */
 export function signContentUrls(
   content: Array<{ url: string; type: string; [key: string]: any }>,
-  expiresInSeconds: number = DEFAULT_EXPIRATION_SECONDS
+  _expiresInSeconds: number = DEFAULT_EXPIRATION_SECONDS
 ): Array<{ url: string; type: string; [key: string]: any }> {
-  return content.map(item => {
-    if (!item.url || !item.url.includes('cloudinary')) {
-      return item
-    }
-
-    const resourceType = item.type === 'video' ? 'video' : 'image'
-    
-    return {
-      ...item,
-      url: signCloudinaryUrl(item.url, {
-        resourceType,
-        expiresInSeconds
-      })
-    }
-  })
+  // Return content as-is since signing is disabled
+  // This fixes the issue where signed URLs were breaking image display
+  return content
 }
 
 /**
