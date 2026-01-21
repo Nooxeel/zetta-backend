@@ -763,7 +763,7 @@ class WebpayService {
         data: {
           creatorId: post.creatorId,
           fanUserId: userId,
-          productType: ProductType.CONTENT,
+          productType: ProductType.PPV,
           currency: 'CLP',
           grossAmount: BigInt(amount),
           appliedFeeScheduleId: feeSchedule!.id,
@@ -801,7 +801,7 @@ class WebpayService {
           tx,
           userId,
           BigInt(platformFee),
-          'purchase',
+          'product',
           transaction.id
         );
         if (referralResult.processed) {
