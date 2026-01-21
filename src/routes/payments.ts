@@ -265,6 +265,8 @@ router.get('/return', async (req: Request, res: Response) => {
         authorizationCode: result.authorizationCode,
         cardNumber: result.cardNumber,
         error: result.errorMessage,
+        paymentType: result.paymentType,
+        redirectTo: result.redirectTo,
       });
     }
 

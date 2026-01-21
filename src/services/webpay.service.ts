@@ -80,6 +80,9 @@ export interface PaymentResult {
   cardNumber?: string;
   paymentTypeCode?: string;
   errorMessage?: string;
+  // Redirect info for successful payments
+  paymentType?: WebpayPaymentType;
+  redirectTo?: string; // URL path to redirect after success (e.g., /@username)
 }
 
 // ==================== SERVICE ====================
@@ -277,6 +280,7 @@ class WebpayService {
       }
 
       // If authorized and it's a content purchase (PPV), record the purchase
+      let redirectTo: string | undefined;
       if (isAuthorized && webpayTx.paymentType === 'CONTENT' && webpayTx.postId) {
         await this.recordContentPurchase(
           webpayTx.userId,
@@ -285,6 +289,26 @@ class WebpayService {
           webpayTx.id,
           webpayTx.buyOrder
         );
+        
+        // Get creator username for redirect
+        const post = await prisma.post.findUnique({
+          where: { id: webpayTx.postId },
+          include: { creator: { include: { user: { select: { username: true } } } } }
+        });
+        if (post?.creator?.user?.username) {
+          redirectTo = `/${post.creator.user.username}`;
+        }
+      }
+      
+      // Get creator username for subscription/donation redirect
+      if (isAuthorized && webpayTx.creatorId && !redirectTo) {
+        const creator = await prisma.creator.findUnique({
+          where: { id: webpayTx.creatorId },
+          include: { user: { select: { username: true } } }
+        });
+        if (creator?.user?.username) {
+          redirectTo = `/${creator.user.username}`;
+        }
       }
 
       return {
@@ -297,6 +321,8 @@ class WebpayService {
         cardNumber: response.card_detail?.card_number,
         paymentTypeCode: response.payment_type_code,
         errorMessage: isAuthorized ? undefined : `Pago rechazado (código: ${response.response_code})`,
+        paymentType: webpayTx.paymentType,
+        redirectTo,
       };
     } catch (error) {
       console.error(`[Webpay] Error confirming payment:`, error);
