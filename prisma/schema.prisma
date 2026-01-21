@@ -67,6 +67,8 @@ model User {
   contentPurchases   ContentPurchase[]
   // Screenshot attempts tracking
   screenshotAttempts ScreenshotAttempt[]
+  // Audit log entries
+  auditLogs          AuditLog[]
 }
 
 // Password Reset Token
@@ -1313,4 +1315,134 @@ enum WebpayStatus {
   TIMEOUT           // User didn't complete in time
   REVERSED          // Payment was reversed
   REFUNDED          // Payment was refunded
+}
+
+// ============================================
+// AUDIT LOG - Track all user actions
+// ============================================
+model AuditLog {
+  id            String        @id @default(uuid())
+  
+  // User who performed the action (null for system actions or anonymous)
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Action details
+  action        AuditAction   // Type of action performed
+  category      AuditCategory // Category for grouping
+  description   String?       // Human-readable description
+  
+  // Target entity (what was affected)
+  targetType    String?       // 'User', 'Post', 'Creator', 'Subscription', etc.
+  targetId      String?       // ID of the target entity
+  
+  // Additional context as JSON
+  metadata      Json?         // Flexible JSON for action-specific data
+  
+  // Request context
+  ipAddress     String?
+  userAgent     String?
+  sessionId     String?       // To group actions in same session
+  
+  // Result
+  status        AuditStatus   @default(SUCCESS)
+  errorMessage  String?       // If status is FAILURE
+  
+  // Timing
+  createdAt     DateTime      @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([category])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+enum AuditAction {
+  // Authentication
+  USER_REGISTER
+  USER_LOGIN
+  USER_LOGOUT
+  USER_LOGIN_FAILED
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_COMPLETE
+  EMAIL_VERIFICATION_REQUEST
+  EMAIL_VERIFICATION_COMPLETE
+  TOKEN_REFRESH
+  
+  // Profile
+  PROFILE_UPDATE
+  AVATAR_UPLOAD
+  COVER_UPLOAD
+  CREATOR_PROFILE_UPDATE
+  AGE_VERIFICATION
+  
+  // Content
+  POST_CREATE
+  POST_UPDATE
+  POST_DELETE
+  POST_LIKE
+  POST_UNLIKE
+  POST_COMMENT
+  POST_COMMENT_DELETE
+  
+  // Subscriptions & Payments
+  SUBSCRIPTION_CREATE
+  SUBSCRIPTION_CANCEL
+  SUBSCRIPTION_RENEW
+  DONATION_SEND
+  TIP_SEND
+  PPV_PURCHASE
+  CARD_REGISTER
+  CARD_DELETE
+  WEBPAY_INIT
+  WEBPAY_COMPLETE
+  WEBPAY_FAIL
+  
+  // Social
+  FAVORITE_ADD
+  FAVORITE_REMOVE
+  COMMENT_CREATE
+  COMMENT_APPROVE
+  COMMENT_REJECT
+  COMMENT_DELETE
+  MESSAGE_SEND
+  BROADCAST_SEND
+  USER_BLOCK
+  USER_UNBLOCK
+  
+  // Gamification
+  POINTS_EARN
+  BADGE_UNLOCK
+  MISSION_COMPLETE
+  ROULETTE_SPIN
+  REWARD_CLAIM
+  
+  // Security
+  SCREENSHOT_ATTEMPT
+  SUSPICIOUS_ACTIVITY
+  RATE_LIMIT_EXCEEDED
+  
+  // Admin
+  ADMIN_ACTION
+  SYSTEM_ACTION
+}
+
+enum AuditCategory {
+  AUTH          // Authentication & authorization
+  PROFILE       // Profile updates
+  CONTENT       // Posts & media
+  PAYMENT       // Financial transactions
+  SOCIAL        // Social interactions
+  GAMIFICATION  // Points, badges, rewards
+  SECURITY      // Security events
+  ADMIN         // Administrative actions
+  SYSTEM        // System events
+}
+
+enum AuditStatus {
+  SUCCESS
+  FAILURE
+  PENDING
 }

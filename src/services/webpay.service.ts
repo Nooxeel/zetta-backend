@@ -12,6 +12,7 @@ import prisma from '../lib/prisma';
 import { WebpayPaymentType, WebpayStatus, ProductType, TransactionStatus } from '@prisma/client';
 import { createTransactionLedgerEntries, LEDGER_CODES } from './ledgerService';
 import { processReferralCommission } from './referralService';
+import { audit } from './audit.service';
 
 // Default fee schedule ID (10% platform fee)
 const DEFAULT_FEE_SCHEDULE_ID = 'default-fee-schedule';
@@ -255,6 +256,13 @@ class WebpayService {
         },
       });
 
+      // Audit: log transaction result
+      if (isAuthorized) {
+        audit.webpayComplete(webpayTx.userId, webpayTx.id, webpayTx.amount);
+      } else {
+        audit.webpayFail(webpayTx.userId, webpayTx.id, `Response code: ${response.response_code}`);
+      }
+
       // If authorized and it's a subscription, activate it
       if (isAuthorized && webpayTx.paymentType === 'SUBSCRIPTION' && webpayTx.subscriptionTierId) {
         await this.activateSubscription(
@@ -326,6 +334,11 @@ class WebpayService {
       };
     } catch (error) {
       console.error(`[Webpay] Error confirming payment:`, error);
+      
+      // Audit: payment failed
+      if (webpayTx) {
+        audit.webpayFail(webpayTx.userId, webpayTx.id, String(error));
+      }
       
       await prisma.webpayTransaction.update({
         where: { id: webpayTx.id },

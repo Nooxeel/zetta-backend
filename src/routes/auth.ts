@@ -16,6 +16,7 @@ import {
   revokeAllUserRefreshTokens,
   getUserSessions
 } from '../lib/refreshToken'
+import { audit } from '../services/audit.service'
 
 const router = Router()
 const logger = createLogger('Auth')
@@ -126,6 +127,9 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
 
     logger.info('[REGISTER] Registration successful', { userId: user.id, username: user.username })
 
+    // Audit: log registration
+    audit.userRegister(user.id, req, { email: user.email, username: user.username, isCreator })
+
     res.status(201).json({
       message: 'User created successfully',
       user: {
@@ -166,12 +170,16 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     })
 
     if (!user) {
+      // Audit: failed login - user not found
+      audit.userLoginFailed(email, req, 'User not found')
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
     // Check password
     const validPassword = await bcrypt.compare(password, user.password)
     if (!validPassword) {
+      // Audit: failed login - wrong password
+      audit.userLoginFailed(email, req, 'Invalid password')
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
@@ -190,6 +198,9 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     // Set httpOnly cookies
     setTokenCookie(res, tokenPair.accessToken)
     setRefreshTokenCookie(res, tokenPair.refreshToken)
+
+    // Audit: successful login
+    audit.userLogin(user.id, req)
 
     res.json({
       user: {
