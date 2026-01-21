@@ -195,8 +195,21 @@ async function assignDailyMissions(userId: string, isCreator: boolean = false) {
     where: { type: 'DAILY', isActive: true, forCreators: false }
   });
 
-  const shuffledFan = fanMissions.sort(() => Math.random() - 0.5);
-  const selectedMissions = shuffledFan.slice(0, 3);
+  // Ensure login mission is always included
+  const loginMission = fanMissions.find(m => m.code === 'daily_login');
+  const otherMissions = fanMissions.filter(m => m.code !== 'daily_login');
+  
+  const shuffledFan = otherMissions.sort(() => Math.random() - 0.5);
+  const selectedMissions: typeof fanMissions = [];
+  
+  // Always add login mission first
+  if (loginMission) {
+    selectedMissions.push(loginMission);
+  }
+  
+  // Add 2 more random missions (or 3 if no login mission found)
+  const remainingSlots = loginMission ? 2 : 3;
+  selectedMissions.push(...shuffledFan.slice(0, remainingSlots));
 
   // If user is a creator, also give them creator missions
   if (isCreator) {
