@@ -63,6 +63,8 @@ model User {
   savedCards         SavedCard[]
   // Refresh tokens for JWT auth
   refreshTokens      RefreshToken[]
+  // Content purchases (PPV)
+  contentPurchases   ContentPurchase[]
 }
 
 // Password Reset Token
@@ -267,9 +269,9 @@ model Post {
   title          String?
   description    String?
   content        String
-  visibility     String        @default("public")
+  visibility     String        @default("public") // public, authenticated, subscribers, ppv
   requiredTierId String?
-  price          Float?
+  price          Float?        // Price for PPV content in CLP
   likes          Int           @default(0)
   comments       Int           @default(0)
   views          Int           @default(0)
@@ -278,9 +280,31 @@ model Post {
   creator        Creator       @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   postLikes      PostLike[]
   postComments   PostComment[]
+  purchases      ContentPurchase[]
 
   @@index([creatorId, createdAt(sort: Desc)])
   @@index([creatorId, visibility])
+}
+
+// Pay-Per-View content purchases
+model ContentPurchase {
+  id              String   @id @default(uuid())
+  postId          String
+  userId          String
+  amount          Float    // Amount paid in CLP
+  currency        String   @default("CLP")
+  platformFee     Float    // Platform commission
+  creatorEarnings Float    // Amount creator receives
+  status          String   @default("completed") // pending, completed, refunded
+  transactionId   String?  // Webpay transaction reference
+  createdAt       DateTime @default(now())
+  
+  post            Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([postId, userId]) // User can only purchase each post once
+  @@index([userId])
+  @@index([postId])
 }
 
 model Donation {

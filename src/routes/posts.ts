@@ -211,10 +211,35 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
     const postsToReturn = hasMore ? posts.slice(0, take) : posts
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null
 
-    // SECURITY: Filter posts based on subscription access
+    // SECURITY: Filter posts based on subscription/purchase access
     const formattedPromises = postsToReturn.map(async (post) => {
-      const isSubscriberOnly = post.visibility === 'subscriber' || post.requiredTierId
+      const isSubscriberOnly = post.visibility === 'subscribers' || post.requiredTierId
+      const isPPV = post.visibility === 'ppv'
       
+      // Check PPV access
+      if (isPPV) {
+        const hasPurchased = await checkPurchaseAccess(userId, post.id)
+        // Creator always has access to their own content
+        const isCreator = post.creator.userId === userId
+        
+        if (!hasPurchased && !isCreator) {
+          // Return locked version with price info
+          const parsedContent = safeJsonParse(post.content, [])
+          return {
+            ...post,
+            content: parsedContent.map((item: any) => ({
+              ...item,
+              url: undefined, // Hide actual URL
+              thumbnail: item.thumbnail || undefined // Keep thumbnail for preview if exists
+            })),
+            isLocked: true,
+            lockReason: 'ppv',
+            price: post.price
+          }
+        }
+      }
+      
+      // Check subscription access
       if (isSubscriberOnly) {
         const hasAccess = await checkSubscriptionAccess(userId, post.creatorId, post.requiredTierId)
         
@@ -838,6 +863,191 @@ router.delete('/comments/:commentId', authenticate, async (req: Request, res: Re
   } catch (error) {
     logger.error('Delete comment error:', error)
     res.status(500).json({ error: 'Failed to delete comment' })
+  }
+})
+
+// ==================== PPV (Pay-Per-View) ENDPOINTS ====================
+
+/**
+ * Check if user has purchased a PPV post
+ */
+async function checkPurchaseAccess(userId: string | null, postId: string): Promise<boolean> {
+  if (!userId) return false
+  
+  const purchase = await prisma.contentPurchase.findUnique({
+    where: {
+      postId_userId: { postId, userId }
+    }
+  })
+  
+  return purchase?.status === 'completed'
+}
+
+// GET /api/posts/:postId/purchase-status - Check if user has purchased the post
+router.get('/:postId/purchase-status', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req)
+    const { postId } = req.params
+
+    const purchase = await prisma.contentPurchase.findUnique({
+      where: {
+        postId_userId: { postId, userId }
+      }
+    })
+
+    res.json({
+      purchased: purchase?.status === 'completed',
+      purchaseDate: purchase?.createdAt || null
+    })
+  } catch (error) {
+    logger.error('Check purchase status error:', error)
+    res.status(500).json({ error: 'Failed to check purchase status' })
+  }
+})
+
+// POST /api/posts/:postId/purchase - Initiate purchase of PPV content
+router.post('/:postId/purchase', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req)
+    const { postId } = req.params
+
+    // Get the post
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: {
+        creator: {
+          include: {
+            user: {
+              select: { id: true, username: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' })
+    }
+
+    // Verify post is PPV and has a price
+    if (post.visibility !== 'ppv') {
+      return res.status(400).json({ error: 'This post is not pay-per-view content' })
+    }
+
+    if (!post.price || post.price <= 0) {
+      return res.status(400).json({ error: 'Post does not have a valid price' })
+    }
+
+    // Check if user is the creator (can't buy own content)
+    if (post.creator.userId === userId) {
+      return res.status(400).json({ error: 'You cannot purchase your own content' })
+    }
+
+    // Check if already purchased
+    const existingPurchase = await prisma.contentPurchase.findUnique({
+      where: {
+        postId_userId: { postId, userId }
+      }
+    })
+
+    if (existingPurchase?.status === 'completed') {
+      return res.status(400).json({ error: 'You have already purchased this content' })
+    }
+
+    // Calculate fees (15% platform fee)
+    const platformFeeRate = 0.15
+    const platformFee = Math.round(post.price * platformFeeRate)
+    const creatorEarnings = post.price - platformFee
+
+    // For now, create a completed purchase directly
+    // TODO: Integrate with Webpay for actual payment processing
+    const purchase = await prisma.contentPurchase.create({
+      data: {
+        postId,
+        userId,
+        amount: post.price,
+        currency: 'CLP',
+        platformFee,
+        creatorEarnings,
+        status: 'completed'
+      }
+    })
+
+    logger.info(`[PPV] User ${userId} purchased post ${postId} for $${post.price} CLP`)
+
+    res.json({
+      success: true,
+      purchase: {
+        id: purchase.id,
+        amount: purchase.amount,
+        createdAt: purchase.createdAt
+      }
+    })
+  } catch (error) {
+    logger.error('Purchase content error:', error)
+    res.status(500).json({ error: 'Failed to process purchase' })
+  }
+})
+
+// GET /api/posts/my-purchases - Get user's purchased content
+router.get('/my-purchases', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req)
+    const { limit = '20', cursor } = req.query as { limit?: string; cursor?: string }
+
+    const take = Math.min(parseInt(limit) || 20, 50)
+
+    const purchases = await prisma.contentPurchase.findMany({
+      where: {
+        userId,
+        status: 'completed'
+      },
+      include: {
+        post: {
+          include: {
+            creator: {
+              include: {
+                user: {
+                  select: {
+                    username: true,
+                    displayName: true,
+                    avatar: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+    })
+
+    const hasMore = purchases.length > take
+    const results = hasMore ? purchases.slice(0, -1) : purchases
+
+    // Parse content and sign URLs for purchased posts
+    const postsWithContent = await Promise.all(results.map(async (purchase) => {
+      const parsedContent = safeJsonParse(purchase.post.content, [])
+      const signedContent = await signContentUrls(parsedContent)
+      
+      return {
+        ...purchase,
+        post: {
+          ...purchase.post,
+          content: signedContent
+        }
+      }
+    }))
+
+    res.json({
+      purchases: postsWithContent,
+      nextCursor: hasMore ? results[results.length - 1].id : null
+    })
+  } catch (error) {
+    logger.error('Get purchases error:', error)
+    res.status(500).json({ error: 'Failed to get purchases' })
   }
 })
 
