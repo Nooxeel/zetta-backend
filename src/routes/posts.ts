@@ -222,6 +222,14 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
         // Creator always has access to their own content
         const isCreator = post.creator.userId === userId
         
+        logger.debug('[GET POSTS] PPV post check:', { 
+          postId: post.id, 
+          userId, 
+          creatorUserId: post.creator.userId,
+          isCreator, 
+          hasPurchased 
+        })
+        
         if (!hasPurchased && !isCreator) {
           // Return locked version with price info
           const parsedContent = safeJsonParse(post.content, [])
@@ -236,6 +244,23 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
             lockReason: 'ppv',
             price: post.price
           }
+        }
+        
+        // Creator/purchaser has access - parse and sign URLs, then return early
+        const parsedContent = safeJsonParse(post.content, [])
+        logger.debug('[GET POSTS] PPV content for owner/purchaser:', { 
+          postId: post.id, 
+          contentLength: parsedContent?.length,
+          firstItemUrl: parsedContent?.[0]?.url?.substring(0, 50)
+        })
+        const signedContent = Array.isArray(parsedContent) 
+          ? signContentUrls(parsedContent, 3600)
+          : parsedContent
+        
+        return {
+          ...post,
+          content: signedContent,
+          isLocked: false
         }
       }
       
