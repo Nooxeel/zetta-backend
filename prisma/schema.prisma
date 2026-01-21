@@ -65,6 +65,8 @@ model User {
   refreshTokens      RefreshToken[]
   // Content purchases (PPV)
   contentPurchases   ContentPurchase[]
+  // Screenshot attempts tracking
+  screenshotAttempts ScreenshotAttempt[]
 }
 
 // Password Reset Token
@@ -341,6 +343,26 @@ model ProfileAuditLog {
 
   @@index([creatorId])
   @@index([fieldName])
+  @@index([createdAt])
+}
+
+// Screenshot/Screen capture attempt tracking
+model ScreenshotAttempt {
+  id          String   @id @default(uuid())
+  userId      String
+  postId      String?  // Which post they were viewing (if applicable)
+  creatorId   String?  // Which creator's profile they were on
+  method      String   // printscreen, win_snip, mac_screenshot, focus_loss, context_menu
+  pageUrl     String?  // URL where it happened
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([creatorId])
+  @@index([postId])
   @@index([createdAt])
 }
 
