@@ -172,6 +172,8 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req) || null
     const { creatorId, visibility, cursor, limit = '10' } = req.query
+    
+    logger.debug('[GET POSTS] Request params:', { userId, creatorId, visibility })
 
     const where: any = {}
 
