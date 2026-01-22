@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
+import { OAuth2Client } from 'google-auth-library'
 import prisma from '../lib/prisma'
 import { registerSchema, loginSchema, validateData } from '../lib/validators'
 import { authLimiter, registerLimiter, skipIfWhitelisted } from '../middleware/rateLimiter'
@@ -17,6 +18,10 @@ import {
   getUserSessions
 } from '../lib/refreshToken'
 import { audit } from '../services/audit.service'
+
+// Google OAuth client
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
 
 const router = Router()
 const logger = createLogger('Auth')
@@ -225,6 +230,169 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Login error:', error)
     res.status(500).json({ error: 'Failed to login' })
+  }
+})
+
+// Google OAuth Login/Register
+router.post('/google', authLimiter, async (req: Request, res: Response) => {
+  try {
+    const { credential, isCreator = false, referralCode } = req.body
+
+    if (!credential) {
+      return res.status(400).json({ error: 'Google credential is required' })
+    }
+
+    if (!googleClient || !GOOGLE_CLIENT_ID) {
+      logger.error('Google OAuth not configured - missing GOOGLE_CLIENT_ID')
+      return res.status(500).json({ error: 'Google login is not configured' })
+    }
+
+    // Verify Google token
+    let payload
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: GOOGLE_CLIENT_ID
+      })
+      payload = ticket.getPayload()
+    } catch (verifyError) {
+      logger.error('Google token verification failed:', verifyError)
+      return res.status(401).json({ error: 'Invalid Google token' })
+    }
+
+    if (!payload || !payload.email) {
+      return res.status(400).json({ error: 'Could not get email from Google account' })
+    }
+
+    const { email, name, picture, sub: googleId } = payload
+    logger.info('[GOOGLE AUTH] Verified Google user', { email, googleId })
+
+    // Check if user already exists
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { creatorProfile: true }
+    })
+
+    let isNewUser = false
+
+    if (user) {
+      // Update Google ID if not set
+      if (!user.googleId) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { 
+            googleId,
+            avatar: user.avatar || picture // Only update avatar if not set
+          }
+        })
+      }
+      logger.info('[GOOGLE AUTH] Existing user logged in', { userId: user.id, email })
+    } else {
+      // Create new user
+      isNewUser = true
+      
+      // Generate a unique username from email
+      const baseUsername = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '')
+      let username = baseUsername
+      let counter = 1
+      
+      // Check if username exists and add number if needed
+      while (await prisma.user.findUnique({ where: { username } })) {
+        username = `${baseUsername}${counter}`
+        counter++
+      }
+
+      // Generate a random secure password (user won't need it for Google login)
+      const randomPassword = crypto.randomBytes(32).toString('hex')
+      const hashedPassword = await bcrypt.hash(randomPassword, 10)
+
+      const newUser = await prisma.user.create({
+        data: {
+          email,
+          username,
+          password: hashedPassword,
+          displayName: name || username,
+          avatar: picture,
+          googleId,
+          emailVerified: true, // Google emails are already verified
+          isCreator: isCreator || false
+        }
+      })
+
+      // Create creator profile if requested
+      if (isCreator) {
+        await prisma.creator.create({
+          data: { userId: newUser.id }
+        })
+      }
+
+      // Apply referral code if provided
+      if (referralCode) {
+        const referralResult = await applyReferralOnSignup(prisma, newUser.id, referralCode)
+        if (referralResult.success) {
+          logger.info(`Referral applied for Google user ${newUser.id} from code ${referralCode}`)
+        }
+      }
+
+      // Send welcome email
+      if (isEmailConfigured()) {
+        sendWelcomeEmail(newUser.email, newUser.displayName || newUser.username, isCreator || false)
+          .catch(err => logger.error('Failed to send welcome email:', err))
+      }
+
+      logger.info('[GOOGLE AUTH] New user created', { userId: newUser.id, email, username })
+      
+      // Reload user with creator profile
+      user = await prisma.user.findUnique({
+        where: { id: newUser.id },
+        include: { creatorProfile: true }
+      })
+
+      if (!user) {
+        throw new Error('Failed to reload user after creation')
+      }
+
+      // Audit: log registration
+      audit.userRegister(user.id, req, { email, username, isCreator, provider: 'google' })
+    }
+
+    // Generate token pair
+    const userAgent = req.headers['user-agent'] || 'unknown'
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
+
+    const tokenPair = await createTokenPair(
+      user.id,
+      user.isCreator,
+      userAgent,
+      ipAddress
+    )
+
+    // Set httpOnly cookies
+    setTokenCookie(res, tokenPair.accessToken)
+    setRefreshTokenCookie(res, tokenPair.refreshToken)
+
+    // Audit: successful login
+    if (!isNewUser) {
+      audit.userLogin(user.id, req)
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar,
+        isCreator: user.isCreator,
+        creatorProfile: (user as any).creatorProfile
+      },
+      token: tokenPair.accessToken,
+      expiresIn: tokenPair.accessTokenExpiresIn,
+      isNewUser
+    })
+  } catch (error) {
+    logger.error('Google auth error:', error)
+    res.status(500).json({ error: 'Failed to authenticate with Google' })
   }
 })
 

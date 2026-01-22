@@ -55,6 +55,8 @@ model User {
   // Email verification
   emailVerified      Boolean       @default(false)
   emailVerifiedAt    DateTime?
+  // OAuth providers
+  googleId           String?       @unique // Google OAuth ID
   // Password reset tokens
   passwordResetTokens PasswordResetToken[]
   // Email verification tokens
