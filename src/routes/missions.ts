@@ -80,13 +80,126 @@ const CREATOR_WEEKLY_MISSIONS = [
   { code: 'creator_weekly_tips', name: 'Propinero', description: 'Recibe 5 propinas', icon: '💵', actionType: 'receive_tip', targetCount: 5, pointsReward: 40, xpReward: 60, category: 'CREATOR_GROWTH', forCreators: true },
 ];
 
+// ========== CREATOR MONTHLY MISSIONS ==========
+const CREATOR_MONTHLY_MISSIONS = [
+  { code: 'creator_monthly_posts', name: 'Creador Prolífico', description: 'Publica 20 posts este mes', icon: '🏆', actionType: 'post', targetCount: 20, pointsReward: 150, xpReward: 200, category: 'CONTENT', forCreators: true },
+  { code: 'creator_monthly_earnings', name: 'Gran Mes', description: 'Gana $200+ este mes', icon: '💰', actionType: 'earn', targetCount: 200, pointsReward: 200, xpReward: 300, category: 'CREATOR_GROWTH', forCreators: true },
+  { code: 'creator_monthly_subs', name: 'Influencer', description: 'Consigue 10 nuevos suscriptores', icon: '🌟', actionType: 'new_subscriber', targetCount: 10, pointsReward: 150, xpReward: 200, category: 'CREATOR_GROWTH', forCreators: true },
+  { code: 'creator_monthly_engagement', name: 'Comunidad Activa', description: 'Recibe 50 comentarios', icon: '💬', actionType: 'receive_comment', targetCount: 50, pointsReward: 100, xpReward: 150, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+];
+
+// ========== CREATOR ACHIEVEMENTS (One-time milestones) ==========
+const CREATOR_ACHIEVEMENTS = [
+  // First time achievements
+  { code: 'creator_first_photo', name: 'Primera Foto', description: 'Sube tu primera imagen', icon: '📷', actionType: 'upload_photo', targetCount: 1, pointsReward: 20, xpReward: 30, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_first_video', name: 'Primera Video', description: 'Sube tu primer video', icon: '🎥', actionType: 'upload_video', targetCount: 1, pointsReward: 30, xpReward: 50, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_first_subscriber', name: 'Primer Suscriptor', description: 'Consigue tu primer suscriptor', icon: '🎉', actionType: 'get_subscriber', targetCount: 1, pointsReward: 50, xpReward: 100, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_first_tip', name: 'Primera Propina', description: 'Recibe tu primera propina', icon: '💝', actionType: 'receive_tip', targetCount: 1, pointsReward: 30, xpReward: 50, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_first_comment', name: 'Primer Comentario', description: 'Recibe tu primer comentario', icon: '💬', actionType: 'receive_comment', targetCount: 1, pointsReward: 15, xpReward: 25, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Milestone achievements - Likes
+  { code: 'creator_5_likes', name: '5 Likes', description: 'Obtén 5 likes en total', icon: '❤️', actionType: 'total_likes', targetCount: 5, pointsReward: 25, xpReward: 40, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_25_likes', name: '25 Likes', description: 'Obtén 25 likes en total', icon: '💕', actionType: 'total_likes', targetCount: 25, pointsReward: 50, xpReward: 80, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_100_likes', name: '100 Likes', description: 'Obtén 100 likes en total', icon: '💖', actionType: 'total_likes', targetCount: 100, pointsReward: 100, xpReward: 150, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_500_likes', name: '500 Likes', description: 'Obtén 500 likes en total', icon: '💗', actionType: 'total_likes', targetCount: 500, pointsReward: 200, xpReward: 300, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Milestone achievements - Comments
+  { code: 'creator_5_comments', name: '5 Comentarios', description: 'Recibe 5 comentarios en tu libro de visitas', icon: '📝', actionType: 'total_comments', targetCount: 5, pointsReward: 25, xpReward: 40, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_25_comments', name: '25 Comentarios', description: 'Recibe 25 comentarios en tu libro de visitas', icon: '📖', actionType: 'total_comments', targetCount: 25, pointsReward: 50, xpReward: 80, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_100_comments', name: '100 Comentarios', description: 'Recibe 100 comentarios en tu libro de visitas', icon: '📚', actionType: 'total_comments', targetCount: 100, pointsReward: 100, xpReward: 150, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Milestone achievements - Subscribers
+  { code: 'creator_5_subs', name: '5 Suscriptores', description: 'Consigue 5 suscriptores', icon: '⭐', actionType: 'total_subscribers', targetCount: 5, pointsReward: 75, xpReward: 100, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_10_subs', name: '10 Suscriptores', description: 'Consigue 10 suscriptores', icon: '🌟', actionType: 'total_subscribers', targetCount: 10, pointsReward: 100, xpReward: 150, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_25_subs', name: '25 Suscriptores', description: 'Consigue 25 suscriptores', icon: '✨', actionType: 'total_subscribers', targetCount: 25, pointsReward: 150, xpReward: 200, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_50_subs', name: '50 Suscriptores', description: 'Consigue 50 suscriptores', icon: '💫', actionType: 'total_subscribers', targetCount: 50, pointsReward: 250, xpReward: 350, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_100_subs', name: '100 Suscriptores', description: 'Consigue 100 suscriptores', icon: '🏅', actionType: 'total_subscribers', targetCount: 100, pointsReward: 500, xpReward: 750, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Milestone achievements - Tips received
+  { code: 'creator_5_tips', name: '5 Propinas', description: 'Recibe 5 propinas', icon: '💵', actionType: 'total_tips', targetCount: 5, pointsReward: 50, xpReward: 75, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_25_tips', name: '25 Propinas', description: 'Recibe 25 propinas', icon: '💴', actionType: 'total_tips', targetCount: 25, pointsReward: 100, xpReward: 150, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_100_tips', name: '100 Propinas', description: 'Recibe 100 propinas', icon: '💎', actionType: 'total_tips', targetCount: 100, pointsReward: 250, xpReward: 400, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Content milestones
+  { code: 'creator_10_posts', name: '10 Publicaciones', description: 'Publica 10 posts', icon: '📸', actionType: 'total_posts', targetCount: 10, pointsReward: 50, xpReward: 75, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_50_posts', name: '50 Publicaciones', description: 'Publica 50 posts', icon: '📷', actionType: 'total_posts', targetCount: 50, pointsReward: 150, xpReward: 200, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_100_posts', name: '100 Publicaciones', description: 'Publica 100 posts', icon: '🏆', actionType: 'total_posts', targetCount: 100, pointsReward: 300, xpReward: 500, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Earnings milestones
+  { code: 'creator_earn_100', name: 'Primeros $100', description: 'Gana $100 en total', icon: '💰', actionType: 'total_earnings', targetCount: 100, pointsReward: 100, xpReward: 150, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_earn_500', name: '$500 Ganados', description: 'Gana $500 en total', icon: '🤑', actionType: 'total_earnings', targetCount: 500, pointsReward: 250, xpReward: 350, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_earn_1000', name: '$1000 Ganados', description: 'Gana $1000 en total', icon: '💎', actionType: 'total_earnings', targetCount: 1000, pointsReward: 500, xpReward: 750, category: 'CREATOR_MILESTONE', forCreators: true },
+  
+  // Special achievements
+  { code: 'creator_verified', name: 'Verificado', description: 'Verifica tu cuenta', icon: '✅', actionType: 'verify_account', targetCount: 1, pointsReward: 100, xpReward: 200, category: 'CREATOR_MILESTONE', forCreators: true },
+  { code: 'creator_complete_profile', name: 'Perfil Completo', description: 'Completa tu perfil al 100%', icon: '🎨', actionType: 'complete_profile', targetCount: 1, pointsReward: 50, xpReward: 75, category: 'CREATOR_MILESTONE', forCreators: true },
+];
+
+// ========== FAN ACHIEVEMENTS (One-time milestones) ==========
+const FAN_ACHIEVEMENTS = [
+  // First time achievements
+  { code: 'fan_first_subscription', name: 'Primera Suscripción', description: 'Suscríbete a tu primer creador', icon: '🎟️', actionType: 'first_subscribe', targetCount: 1, pointsReward: 30, xpReward: 50, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_first_tip', name: 'Primera Propina', description: 'Envía tu primera propina', icon: '💸', actionType: 'first_tip', targetCount: 1, pointsReward: 25, xpReward: 40, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_first_comment', name: 'Primer Comentario', description: 'Deja tu primer comentario', icon: '💬', actionType: 'first_comment', targetCount: 1, pointsReward: 15, xpReward: 25, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_first_favorite', name: 'Primer Favorito', description: 'Añade tu primer creador a favoritos', icon: '⭐', actionType: 'first_favorite', targetCount: 1, pointsReward: 10, xpReward: 15, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_first_message', name: 'Primer Mensaje', description: 'Envía tu primer mensaje', icon: '✉️', actionType: 'first_message', targetCount: 1, pointsReward: 15, xpReward: 25, category: 'MILESTONE', forCreators: false },
+  
+  // Subscription milestones
+  { code: 'fan_3_subs', name: 'Coleccionista Novato', description: 'Suscríbete a 3 creadores', icon: '🎫', actionType: 'total_subscriptions', targetCount: 3, pointsReward: 50, xpReward: 75, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_5_subs', name: 'Coleccionista', description: 'Suscríbete a 5 creadores', icon: '🎪', actionType: 'total_subscriptions', targetCount: 5, pointsReward: 75, xpReward: 100, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_10_subs', name: 'Super Fan', description: 'Suscríbete a 10 creadores', icon: '🏆', actionType: 'total_subscriptions', targetCount: 10, pointsReward: 150, xpReward: 200, category: 'MILESTONE', forCreators: false },
+  
+  // Tipping milestones
+  { code: 'fan_5_tips', name: 'Generoso', description: 'Envía 5 propinas', icon: '💵', actionType: 'total_tips_sent', targetCount: 5, pointsReward: 50, xpReward: 75, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_25_tips', name: 'Mecenas', description: 'Envía 25 propinas', icon: '💎', actionType: 'total_tips_sent', targetCount: 25, pointsReward: 125, xpReward: 175, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_100_tips', name: 'Benefactor', description: 'Envía 100 propinas', icon: '👑', actionType: 'total_tips_sent', targetCount: 100, pointsReward: 300, xpReward: 500, category: 'MILESTONE', forCreators: false },
+  
+  // Likes milestones
+  { code: 'fan_10_likes', name: '10 Likes Dados', description: 'Da 10 likes', icon: '❤️', actionType: 'total_likes_given', targetCount: 10, pointsReward: 20, xpReward: 30, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_50_likes', name: '50 Likes Dados', description: 'Da 50 likes', icon: '💕', actionType: 'total_likes_given', targetCount: 50, pointsReward: 50, xpReward: 75, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_200_likes', name: '200 Likes Dados', description: 'Da 200 likes', icon: '💖', actionType: 'total_likes_given', targetCount: 200, pointsReward: 100, xpReward: 150, category: 'MILESTONE', forCreators: false },
+  
+  // Comments milestones
+  { code: 'fan_5_comments', name: '5 Comentarios', description: 'Deja 5 comentarios', icon: '📝', actionType: 'total_comments_made', targetCount: 5, pointsReward: 25, xpReward: 40, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_25_comments', name: '25 Comentarios', description: 'Deja 25 comentarios', icon: '📖', actionType: 'total_comments_made', targetCount: 25, pointsReward: 75, xpReward: 100, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_100_comments', name: '100 Comentarios', description: 'Deja 100 comentarios', icon: '📚', actionType: 'total_comments_made', targetCount: 100, pointsReward: 150, xpReward: 200, category: 'MILESTONE', forCreators: false },
+  
+  // Favorites milestones
+  { code: 'fan_5_favorites', name: '5 Favoritos', description: 'Añade 5 creadores a favoritos', icon: '⭐', actionType: 'total_favorites', targetCount: 5, pointsReward: 25, xpReward: 40, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_15_favorites', name: '15 Favoritos', description: 'Añade 15 creadores a favoritos', icon: '🌟', actionType: 'total_favorites', targetCount: 15, pointsReward: 50, xpReward: 75, category: 'MILESTONE', forCreators: false },
+  
+  // Spending milestones
+  { code: 'fan_spend_50', name: 'Gastador $50', description: 'Gasta $50 en la plataforma', icon: '💰', actionType: 'total_spent', targetCount: 50, pointsReward: 75, xpReward: 100, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_spend_200', name: 'Gastador $200', description: 'Gasta $200 en la plataforma', icon: '🤑', actionType: 'total_spent', targetCount: 200, pointsReward: 200, xpReward: 300, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_spend_500', name: 'VIP', description: 'Gasta $500 en la plataforma', icon: '💎', actionType: 'total_spent', targetCount: 500, pointsReward: 400, xpReward: 600, category: 'MILESTONE', forCreators: false },
+  
+  // Engagement milestones
+  { code: 'fan_7_day_streak', name: 'Racha de 7 Días', description: 'Inicia sesión 7 días seguidos', icon: '🔥', actionType: 'login_streak', targetCount: 7, pointsReward: 50, xpReward: 75, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_30_day_streak', name: 'Racha de 30 Días', description: 'Inicia sesión 30 días seguidos', icon: '🔥', actionType: 'login_streak', targetCount: 30, pointsReward: 200, xpReward: 300, category: 'MILESTONE', forCreators: false },
+  
+  // Special achievements
+  { code: 'fan_verified', name: 'Verificado', description: 'Verifica tu cuenta', icon: '✅', actionType: 'verify_account', targetCount: 1, pointsReward: 50, xpReward: 100, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_complete_profile', name: 'Perfil Completo', description: 'Completa tu perfil al 100%', icon: '🎨', actionType: 'complete_profile', targetCount: 1, pointsReward: 25, xpReward: 40, category: 'MILESTONE', forCreators: false },
+  { code: 'fan_ruleta_winner', name: 'Ganador de Ruleta', description: 'Gana un premio en la ruleta', icon: '🎰', actionType: 'ruleta_win', targetCount: 1, pointsReward: 20, xpReward: 30, category: 'MILESTONE', forCreators: false },
+];
+
+// ========== FAN MONTHLY MISSIONS ==========
+const FAN_MONTHLY_MISSIONS = [
+  { code: 'fan_monthly_tips', name: 'Mecenas Mensual', description: 'Envía 10 propinas este mes', icon: '💰', actionType: 'tip', targetCount: 10, pointsReward: 100, xpReward: 150, category: 'TIPPING', forCreators: false },
+  { code: 'fan_monthly_explore', name: 'Explorador Experto', description: 'Visita 50 perfiles este mes', icon: '🌎', actionType: 'visit', targetCount: 50, pointsReward: 75, xpReward: 100, category: 'DISCOVERY', forCreators: false },
+  { code: 'fan_monthly_social', name: 'Mariposa Social', description: 'Deja 20 comentarios este mes', icon: '🦋', actionType: 'comment', targetCount: 20, pointsReward: 80, xpReward: 120, category: 'SOCIAL', forCreators: false },
+  { code: 'fan_monthly_streak', name: 'Dedicación', description: 'Inicia sesión 20 días este mes', icon: '🏅', actionType: 'login', targetCount: 20, pointsReward: 100, xpReward: 150, category: 'ENGAGEMENT', forCreators: false },
+];
+
 // ==================== SEED MISSIONS (run once) ====================
 
 async function ensureMissionsSeeded() {
   // Check if we need to add new missions (version check)
   const missionCount = await prisma.mission.count();
   const expectedCount = DAILY_MISSIONS.length + WEEKLY_MISSIONS.length + 
-                        CREATOR_DAILY_MISSIONS.length + CREATOR_WEEKLY_MISSIONS.length;
+                        CREATOR_DAILY_MISSIONS.length + CREATOR_WEEKLY_MISSIONS.length +
+                        CREATOR_MONTHLY_MISSIONS.length + CREATOR_ACHIEVEMENTS.length +
+                        FAN_ACHIEVEMENTS.length + FAN_MONTHLY_MISSIONS.length;
   
   // If we have fewer missions than expected, seed missing ones
   if (missionCount < expectedCount) {
@@ -116,6 +229,26 @@ async function ensureMissionsSeeded() {
       }
     }
     
+    // Seed fan monthly missions
+    for (const mission of FAN_MONTHLY_MISSIONS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'MONTHLY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
+      }
+    }
+    
+    // Seed fan achievements
+    for (const mission of FAN_ACHIEVEMENTS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'ACHIEVEMENT', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
+      }
+    }
+    
     // Seed creator daily missions
     for (const mission of CREATOR_DAILY_MISSIONS) {
       if (!existingCodes.has(mission.code)) {
@@ -131,6 +264,26 @@ async function ensureMissionsSeeded() {
       if (!existingCodes.has(mission.code)) {
         await prisma.mission.create({
           data: { ...mission, type: 'WEEKLY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
+      }
+    }
+    
+    // Seed creator monthly missions
+    for (const mission of CREATOR_MONTHLY_MISSIONS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'MONTHLY', category: mission.category as any }
+        });
+        console.log(`  ✅ Added: ${mission.code}`);
+      }
+    }
+    
+    // Seed creator achievements
+    for (const mission of CREATOR_ACHIEVEMENTS) {
+      if (!existingCodes.has(mission.code)) {
+        await prisma.mission.create({
+          data: { ...mission, type: 'ACHIEVEMENT', category: mission.category as any }
         });
         console.log(`  ✅ Added: ${mission.code}`);
       }
@@ -279,6 +432,114 @@ async function assignWeeklyMissions(userId: string, isCreator: boolean = false) 
   }
 }
 
+function getStartOfMonth(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+}
+
+function getEndOfMonth(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+async function assignMonthlyMissions(userId: string, isCreator: boolean = false) {
+  const startOfMonth = getStartOfMonth();
+  const endOfMonth = getEndOfMonth();
+
+  // Check if user already has monthly missions for this month
+  const existingMonthly = await prisma.userMission.findFirst({
+    where: {
+      userId,
+      assignedAt: { gte: startOfMonth, lte: endOfMonth },
+      mission: { type: 'MONTHLY' }
+    }
+  });
+
+  if (existingMonthly) return; // Already assigned
+
+  // Get all monthly missions based on user type
+  const fanMissions = await prisma.mission.findMany({
+    where: { type: 'MONTHLY', isActive: true, forCreators: false }
+  });
+
+  const shuffledFan = fanMissions.sort(() => Math.random() - 0.5);
+  const selectedMissions = shuffledFan.slice(0, 2); // 2 fan monthly missions
+
+  // If user is a creator, also give them creator missions
+  if (isCreator) {
+    const creatorMissions = await prisma.mission.findMany({
+      where: { type: 'MONTHLY', isActive: true, forCreators: true }
+    });
+    const shuffledCreator = creatorMissions.sort(() => Math.random() - 0.5);
+    selectedMissions.push(...shuffledCreator.slice(0, 2)); // 2 creator monthly missions
+  }
+
+  // Assign missions
+  for (const mission of selectedMissions) {
+    await prisma.userMission.create({
+      data: {
+        userId,
+        missionId: mission.id,
+        expiresAt: endOfMonth,
+        assignedAt: new Date()
+      }
+    });
+  }
+}
+
+async function assignAchievements(userId: string, isCreator: boolean = false) {
+  // Get already assigned achievements for this user
+  const existingAchievements = await prisma.userMission.findMany({
+    where: {
+      userId,
+      mission: { type: 'ACHIEVEMENT' }
+    },
+    select: { missionId: true }
+  });
+  const existingIds = new Set(existingAchievements.map(a => a.missionId));
+
+  // Far future expiry for achievements (they don't expire)
+  const farFuture = new Date('2099-12-31');
+
+  // Assign fan achievements that haven't been assigned yet
+  const fanAchievements = await prisma.mission.findMany({
+    where: { type: 'ACHIEVEMENT', isActive: true, forCreators: false }
+  });
+
+  for (const achievement of fanAchievements) {
+    if (!existingIds.has(achievement.id)) {
+      await prisma.userMission.create({
+        data: {
+          userId,
+          missionId: achievement.id,
+          expiresAt: farFuture,
+          assignedAt: new Date()
+        }
+      });
+    }
+  }
+
+  // If user is a creator, also assign creator achievements
+  if (isCreator) {
+    const creatorAchievements = await prisma.mission.findMany({
+      where: { type: 'ACHIEVEMENT', isActive: true, forCreators: true }
+    });
+
+    for (const achievement of creatorAchievements) {
+      if (!existingIds.has(achievement.id)) {
+        await prisma.userMission.create({
+          data: {
+            userId,
+            missionId: achievement.id,
+            expiresAt: farFuture,
+            assignedAt: new Date()
+          }
+        });
+      }
+    }
+  }
+}
+
 // Define type for userMission with mission included
 type UserMissionWithMission = UserMission & { mission: Mission };
 
@@ -294,6 +555,8 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     // Ensure missions are assigned (creators get extra missions)
     await assignDailyMissions(userId, isCreator);
     await assignWeeklyMissions(userId, isCreator);
+    await assignMonthlyMissions(userId, isCreator);
+    await assignAchievements(userId, isCreator);
 
     // Get current missions (not expired)
     const userMissions = await prisma.userMission.findMany({
@@ -339,6 +602,14 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       .filter((um: UserMissionWithMission) => um.mission.type === 'WEEKLY' && !um.mission.forCreators)
       .map(formatMission);
 
+    const monthly = userMissions
+      .filter((um: UserMissionWithMission) => um.mission.type === 'MONTHLY' && !um.mission.forCreators)
+      .map(formatMission);
+
+    const achievements = userMissions
+      .filter((um: UserMissionWithMission) => um.mission.type === 'ACHIEVEMENT' && !um.mission.forCreators)
+      .map(formatMission);
+
     // Creator-specific missions
     const creatorDaily = userMissions
       .filter((um: UserMissionWithMission) => um.mission.type === 'DAILY' && um.mission.forCreators)
@@ -348,20 +619,40 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       .filter((um: UserMissionWithMission) => um.mission.type === 'WEEKLY' && um.mission.forCreators)
       .map(formatMission);
 
+    const creatorMonthly = userMissions
+      .filter((um: UserMissionWithMission) => um.mission.type === 'MONTHLY' && um.mission.forCreators)
+      .map(formatMission);
+
+    const creatorAchievements = userMissions
+      .filter((um: UserMissionWithMission) => um.mission.type === 'ACHIEVEMENT' && um.mission.forCreators)
+      .map(formatMission);
+
     res.json({
       daily,
       weekly,
+      monthly,
+      achievements,
       creatorDaily,
       creatorWeekly,
+      creatorMonthly,
+      creatorAchievements,
       summary: {
         dailyCompleted: daily.filter((m: { completed: boolean }) => m.completed).length,
         dailyTotal: daily.length,
         weeklyCompleted: weekly.filter((m: { completed: boolean }) => m.completed).length,
         weeklyTotal: weekly.length,
+        monthlyCompleted: monthly.filter((m: { completed: boolean }) => m.completed).length,
+        monthlyTotal: monthly.length,
+        achievementsCompleted: achievements.filter((m: { completed: boolean }) => m.completed).length,
+        achievementsTotal: achievements.length,
         creatorDailyCompleted: creatorDaily.filter((m: { completed: boolean }) => m.completed).length,
         creatorDailyTotal: creatorDaily.length,
         creatorWeeklyCompleted: creatorWeekly.filter((m: { completed: boolean }) => m.completed).length,
         creatorWeeklyTotal: creatorWeekly.length,
+        creatorMonthlyCompleted: creatorMonthly.filter((m: { completed: boolean }) => m.completed).length,
+        creatorMonthlyTotal: creatorMonthly.length,
+        creatorAchievementsCompleted: creatorAchievements.filter((m: { completed: boolean }) => m.completed).length,
+        creatorAchievementsTotal: creatorAchievements.length,
         unclaimedRewards: userMissions.filter((um: UserMissionWithMission) => um.completed && !um.claimed).length
       }
     });

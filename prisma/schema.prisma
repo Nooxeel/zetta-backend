@@ -974,6 +974,8 @@ model Mission {
 enum MissionType {
   DAILY
   WEEKLY
+  MONTHLY
+  ACHIEVEMENT  // One-time achievements/milestones
 }
 
 enum MissionCategory {
@@ -986,6 +988,8 @@ enum MissionCategory {
   CONTENT       // Creator: posting content
   CREATOR_ENGAGEMENT // Creator: interacting with fans
   CREATOR_GROWTH     // Creator: getting subscribers, earnings
+  MILESTONE          // One-time achievements
+  CREATOR_MILESTONE  // Creator one-time achievements
 }
 
 // User's assigned missions
