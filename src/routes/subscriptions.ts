@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { createLogger } from '../lib/logger'
 import prisma from '../lib/prisma'
 import { authenticate, getUserId } from '../middleware/auth'
+import { tiersCache } from '../lib/cache'
 
 const router = Router()
 const logger = createLogger('Subscriptions')
@@ -11,6 +12,14 @@ router.get('/tiers/:creatorId', async (req: Request, res: Response): Promise<voi
   try {
     const { creatorId } = req.params
 
+    // Check cache first
+    const cacheKey = `tiers:${creatorId}`
+    const cached = tiersCache.get(cacheKey)
+    if (cached) {
+      res.json(cached)
+      return
+    }
+
     const tiers = await prisma.subscriptionTier.findMany({
       where: {
         creatorId,
@@ -18,6 +27,9 @@ router.get('/tiers/:creatorId', async (req: Request, res: Response): Promise<voi
       },
       orderBy: { order: 'asc' }
     })
+
+    // Cache the result
+    tiersCache.set(cacheKey, tiers)
 
     res.json(tiers)
   } catch (error) {
@@ -106,6 +118,9 @@ router.post('/tiers', authenticate, async (req: Request, res: Response): Promise
       }
     })
 
+    // Invalidate cache when tiers change
+    tiersCache.delete(`tiers:${creator.id}`)
+
     res.status(201).json(tier)
   } catch (error) {
     logger.error('Error al crear tier:', error)
@@ -161,6 +176,9 @@ router.put('/tiers/:tierId', authenticate, async (req: Request, res: Response): 
       data: updateData
     })
 
+    // Invalidate cache when tiers change
+    tiersCache.delete(`tiers:${creator.id}`)
+
     res.json(tier)
   } catch (error) {
     logger.error('Error al actualizar tier:', error)
@@ -210,6 +228,9 @@ router.delete('/tiers/:tierId', authenticate, async (req: Request, res: Response
     await prisma.subscriptionTier.delete({
       where: { id: tierId }
     })
+
+    // Invalidate cache when tiers change
+    tiersCache.delete(`tiers:${creator.id}`)
 
     res.json({ message: 'Plan eliminado correctamente' })
   } catch (error) {

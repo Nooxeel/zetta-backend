@@ -71,10 +71,9 @@ export async function processSubscriptionRenewals(): Promise<RenewalResult> {
 
 /**
  * Expire subscriptions that have passed their endDate
+ * OPTIMIZED: Use batch updateMany + parallel email sending
  */
 async function expireEndedSubscriptions(now: Date): Promise<string[]> {
-  const expiredIds: string[] = []
-
   // Find active subscriptions with endDate in the past
   const subscriptionsToExpire = await prisma.subscription.findMany({
     where: {
@@ -99,34 +98,36 @@ async function expireEndedSubscriptions(now: Date): Promise<string[]> {
     }
   })
 
-  for (const sub of subscriptionsToExpire) {
-    try {
-      await prisma.subscription.update({
-        where: { id: sub.id },
-        data: {
-          status: 'expired',
-          updatedAt: now
-        }
-      })
+  if (subscriptionsToExpire.length === 0) {
+    return []
+  }
 
-      expiredIds.push(sub.id)
+  const expiredIds = subscriptionsToExpire.map(sub => sub.id)
 
-      // Send expiration email
-      if (isEmailConfigured()) {
-        await sendSubscriptionExpiredEmail(
+  // OPTIMIZED: Batch update all expired subscriptions at once
+  await prisma.subscription.updateMany({
+    where: { id: { in: expiredIds } },
+    data: {
+      status: 'expired',
+      updatedAt: now
+    }
+  })
+
+  // OPTIMIZED: Send expiration emails in parallel
+  if (isEmailConfigured()) {
+    await Promise.allSettled(
+      subscriptionsToExpire.map(sub =>
+        sendSubscriptionExpiredEmail(
           sub.user.email,
           sub.user.username,
           sub.creator.user.displayName,
           sub.tier.name
-        ).catch(err => logger.error(`Failed to send expiration email: ${err.message}`))
-      }
-
-      logger.info(`Subscription ${sub.id} expired for user ${sub.userId}`)
-    } catch (error) {
-      logger.error(`Failed to expire subscription ${sub.id}:`, error)
-    }
+        ).catch(err => logger.error(`Failed to send expiration email for ${sub.id}: ${err.message}`))
+      )
+    )
   }
 
+  logger.info(`Expired ${expiredIds.length} subscriptions`)
   return expiredIds
 }
 

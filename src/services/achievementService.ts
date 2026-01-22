@@ -168,63 +168,63 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 
   if (!user) throw new Error('User not found');
 
-  // Get streak - now stored directly in UserPoints
-  // (removed separate LoginStreak query)
-
-  // Get total spent (donations + subscriptions)
-  const donations = await prisma.donation.aggregate({
-    where: { fromUserId: userId },
-    _sum: { amount: true }
-  });
-
-  // Get active subscriptions count
-  const activeSubscriptions = await prisma.subscription.count({
-    where: { userId, status: 'ACTIVE' }
-  });
-
-  // Get tips sent count
-  const tipsSent = await prisma.donation.count({
-    where: { fromUserId: userId }
-  });
-
-  // Get comments count
-  const comments = await prisma.comment.count({
-    where: { userId }
-  });
-
-  // Get likes count
-  const likes = await prisma.postLike.count({
-    where: { userId }
-  });
-
-  // Get missions completed
-  const missionsCompleted = await prisma.userMission.count({
-    where: { userId, completed: true, claimed: true }
-  });
+  // OPTIMIZED: Execute all queries in parallel instead of sequentially
+  const [
+    donationsAgg,
+    activeSubscriptions,
+    tipsSent,
+    comments,
+    likes,
+    missionsCompleted,
+    creatorStats
+  ] = await Promise.all([
+    // Total spent (donations)
+    prisma.donation.aggregate({
+      where: { fromUserId: userId },
+      _sum: { amount: true }
+    }),
+    // Active subscriptions count
+    prisma.subscription.count({
+      where: { userId, status: 'ACTIVE' }
+    }),
+    // Tips sent count
+    prisma.donation.count({
+      where: { fromUserId: userId }
+    }),
+    // Comments count
+    prisma.comment.count({
+      where: { userId }
+    }),
+    // Likes count
+    prisma.postLike.count({
+      where: { userId }
+    }),
+    // Missions completed
+    prisma.userMission.count({
+      where: { userId, completed: true, claimed: true }
+    }),
+    // Creator stats (only if creator)
+    user.isCreator && user.creatorProfile
+      ? Promise.all([
+          prisma.subscription.count({
+            where: { 
+              tier: { creatorId: user.creatorProfile.id },
+              status: 'ACTIVE'
+            }
+          }),
+          prisma.donation.count({
+            where: { toCreatorId: user.creatorProfile.id }
+          })
+        ])
+      : Promise.resolve([0, 0] as [number, number])
+  ]);
 
   // Calculate tenure in days
   const tenureDays = Math.floor((Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
 
-  // Creator stats
-  let subscribers = 0;
-  let tipsReceived = 0;
-  
-  if (user.isCreator && user.creatorProfile) {
-    subscribers = await prisma.subscription.count({
-      where: { 
-        tier: { creatorId: user.creatorProfile.id },
-        status: 'ACTIVE'
-      }
-    });
-    
-    tipsReceived = await prisma.donation.count({
-      where: { toCreatorId: user.creatorProfile.id }
-    });
-  }
-
   return {
     streak: user.userPoints?.loginStreak || 0,
-    totalSpent: donations._sum.amount || 0,
+    totalSpent: donationsAgg._sum.amount || 0,
     activeSubscriptions,
     tipsSent,
     comments,
@@ -233,8 +233,8 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     xp: user.userPoints?.xp || 0,
     tenureDays,
     isCreator: user.isCreator,
-    subscribers,
-    tipsReceived,
+    subscribers: creatorStats[0],
+    tipsReceived: creatorStats[1],
   };
 }
 

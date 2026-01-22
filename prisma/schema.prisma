@@ -329,6 +329,9 @@ model Donation {
   @@index([fromUserId])
   @@index([toCreatorId])
   @@index([toCreatorId, createdAt(sort: Desc)])
+  // Optimized for leaderboard queries
+  @@index([status, isAnonymous, createdAt])
+  @@index([toCreatorId, status, isAnonymous])
 }
 
 model ProfileAuditLog {
@@ -383,6 +386,8 @@ model Comment {
   @@index([userId])
   @@index([isApproved])
   @@index([createdAt])
+  // Optimized for public comments queries
+  @@index([creatorId, isApproved, createdAt(sort: Desc)])
 }
 
 model Favorite {
@@ -716,6 +721,8 @@ model PostLike {
   @@index([postId])
   @@index([userId])
   @@index([createdAt])
+  // Optimized for batch like status queries
+  @@index([userId, postId])
 }
 
 model PostComment {
