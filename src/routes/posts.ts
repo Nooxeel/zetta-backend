@@ -43,6 +43,63 @@ async function checkSubscriptionAccess(userId: string | null, creatorId: string,
 }
 
 /**
+ * Batch load subscription access for multiple creator IDs
+ * Returns a Map of creatorId -> { hasAccess: boolean, tierId: string | null }
+ */
+async function batchCheckSubscriptionAccess(
+  userId: string | null, 
+  creatorIds: string[]
+): Promise<Map<string, { hasAccess: boolean; tierId: string | null }>> {
+  const result = new Map<string, { hasAccess: boolean; tierId: string | null }>()
+  
+  if (!userId || creatorIds.length === 0) {
+    creatorIds.forEach(id => result.set(id, { hasAccess: false, tierId: null }))
+    return result
+  }
+  
+  // Batch query all subscriptions at once
+  const subscriptions = await prisma.subscription.findMany({
+    where: {
+      userId,
+      creatorId: { in: creatorIds },
+      status: 'active'
+    },
+    select: { creatorId: true, tierId: true }
+  })
+  
+  const subMap = new Map(subscriptions.map(s => [s.creatorId, s.tierId]))
+  
+  creatorIds.forEach(id => {
+    const tierId = subMap.get(id)
+    result.set(id, { hasAccess: !!tierId, tierId: tierId || null })
+  })
+  
+  return result
+}
+
+/**
+ * Batch load purchase access for multiple post IDs
+ * Returns a Set of postIds that the user has purchased
+ */
+async function batchCheckPurchaseAccess(
+  userId: string | null, 
+  postIds: string[]
+): Promise<Set<string>> {
+  if (!userId || postIds.length === 0) return new Set()
+  
+  const purchases = await prisma.contentPurchase.findMany({
+    where: {
+      userId,
+      postId: { in: postIds },
+      status: 'completed'
+    },
+    select: { postId: true }
+  })
+  
+  return new Set(purchases.map(p => p.postId))
+}
+
+/**
  * Safely parse JSON with fallback
  * Prevents crashes from corrupted data
  */
@@ -213,16 +270,27 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
     const postsToReturn = hasMore ? posts.slice(0, take) : posts
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null
 
-    // SECURITY: Filter posts based on subscription/purchase access
-    const formattedPromises = postsToReturn.map(async (post) => {
+    // PERFORMANCE: Batch load all access checks upfront instead of N+1 queries
+    const creatorIds = [...new Set(postsToReturn.map(p => p.creatorId))]
+    const ppvPostIds = postsToReturn.filter(p => p.visibility === 'ppv').map(p => p.id)
+    
+    const [subscriptionAccess, purchasedPostIds] = await Promise.all([
+      batchCheckSubscriptionAccess(userId, creatorIds),
+      batchCheckPurchaseAccess(userId, ppvPostIds)
+    ])
+    
+    // Create a set of creator userIds for quick "is owner" check
+    const creatorUserIdMap = new Map(postsToReturn.map(p => [p.creatorId, p.creator.userId]))
+
+    // SECURITY: Filter posts based on subscription/purchase access (now using cached data)
+    const formatted = postsToReturn.map((post) => {
       const isSubscriberOnly = post.visibility === 'subscribers' || post.requiredTierId
       const isPPV = post.visibility === 'ppv'
+      const isCreator = post.creator.userId === userId
       
       // Check PPV access
       if (isPPV) {
-        const hasPurchased = await checkPurchaseAccess(userId, post.id)
-        // Creator always has access to their own content
-        const isCreator = post.creator.userId === userId
+        const hasPurchased = purchasedPostIds.has(post.id)
         
         logger.debug('[GET POSTS] PPV post check:', { 
           postId: post.id, 
@@ -267,10 +335,12 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
       }
       
       // Check subscription access
-      if (isSubscriberOnly) {
-        const hasAccess = await checkSubscriptionAccess(userId, post.creatorId, post.requiredTierId)
+      if (isSubscriberOnly && !isCreator) {
+        const subAccess = subscriptionAccess.get(post.creatorId)
+        const hasAccess = subAccess?.hasAccess || false
         
-        if (!hasAccess) {
+        // If specific tier required, check tier matches
+        if (!hasAccess || (post.requiredTierId && subAccess?.tierId !== post.requiredTierId)) {
           // Return locked version of the post
           return {
             ...post,
@@ -293,8 +363,6 @@ router.get('/', optionalAuthenticate, async (req: Request, res: Response) => {
         isLocked: false
       }
     })
-
-    const formatted = await Promise.all(formattedPromises)
 
     res.json({
       posts: formatted,
