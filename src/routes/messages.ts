@@ -377,6 +377,49 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
       unreadCount: newUnreadCount
     })
 
+    // Track mission progress for creators sending messages to fans
+    try {
+      const sender = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isCreator: true }
+      })
+      
+      if (sender?.isCreator) {
+        // Find and update creator's dm_fan missions
+        const now = new Date()
+        const userMissions = await prisma.userMission.findMany({
+          where: {
+            userId,
+            completed: false,
+            expiresAt: { gt: now },
+            mission: {
+              actionType: 'dm_fan',
+              isActive: true,
+              forCreators: true
+            }
+          },
+          include: { mission: true }
+        })
+        
+        for (const um of userMissions) {
+          const newProgress = Math.min(um.progress + 1, um.mission.targetCount)
+          const completed = newProgress >= um.mission.targetCount
+          
+          await prisma.userMission.update({
+            where: { id: um.id },
+            data: {
+              progress: newProgress,
+              completed,
+              completedAt: completed ? new Date() : null
+            }
+          })
+        }
+      }
+    } catch (missionError) {
+      // Don't fail the message send if mission tracking fails
+      logger.warn('Failed to track dm_fan mission:', missionError)
+    }
+
     res.status(201).json(message)
   } catch (error) {
     logger.error('Send message error:', error)
