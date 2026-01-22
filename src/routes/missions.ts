@@ -61,6 +61,7 @@ const CREATOR_DAILY_MISSIONS = [
   { code: 'creator_daily_post', name: 'Publicador', description: 'Publica 1 post', icon: '📸', actionType: 'post', targetCount: 1, pointsReward: 10, xpReward: 15, category: 'CONTENT', forCreators: true },
   // Engagement
   { code: 'creator_daily_dm', name: 'Conectar', description: 'Envía un mensaje a un fan', icon: '✉️', actionType: 'dm_fan', targetCount: 1, pointsReward: 5, xpReward: 10, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+  { code: 'creator_daily_reply', name: 'Respondedor', description: 'Responde 3 mensajes de fans', icon: '💬', actionType: 'reply_fan', targetCount: 3, pointsReward: 10, xpReward: 15, category: 'CREATOR_ENGAGEMENT', forCreators: true },
   { code: 'creator_daily_approve', name: 'Moderador', description: 'Aprueba 3 comentarios', icon: '✅', actionType: 'approve_comment', targetCount: 3, pointsReward: 8, xpReward: 12, category: 'CREATOR_ENGAGEMENT', forCreators: true },
 ];
 
@@ -71,6 +72,7 @@ const CREATOR_WEEKLY_MISSIONS = [
   // Engagement  
   { code: 'creator_weekly_broadcast', name: 'Comunicador', description: 'Envía un Mass DM', icon: '📢', actionType: 'broadcast', targetCount: 1, pointsReward: 20, xpReward: 30, category: 'CREATOR_ENGAGEMENT', forCreators: true },
   { code: 'creator_weekly_messages', name: 'Mensajero', description: 'Envía 10 mensajes a fans', icon: '💬', actionType: 'dm_fan', targetCount: 10, pointsReward: 35, xpReward: 50, category: 'CREATOR_ENGAGEMENT', forCreators: true },
+  { code: 'creator_weekly_replies', name: 'Atención al Fan', description: 'Responde 20 mensajes de fans', icon: '📨', actionType: 'reply_fan', targetCount: 20, pointsReward: 50, xpReward: 80, category: 'CREATOR_ENGAGEMENT', forCreators: true },
   // Growth
   { code: 'creator_weekly_earnings', name: 'Meta de Ingresos', description: 'Gana $50+ esta semana', icon: '💎', actionType: 'earn', targetCount: 50, pointsReward: 75, xpReward: 100, category: 'CREATOR_GROWTH', forCreators: true },
   { code: 'creator_weekly_subs', name: 'Magnetismo', description: 'Consigue 3 nuevos suscriptores', icon: '🧲', actionType: 'new_subscriber', targetCount: 3, pointsReward: 60, xpReward: 80, category: 'CREATOR_GROWTH', forCreators: true },

@@ -385,15 +385,33 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
       })
       
       if (sender?.isCreator) {
-        // Find and update creator's dm_fan missions
         const now = new Date()
+        
+        // Check if this is a REPLY (last message in conversation was from the other user)
+        const lastMessage = await prisma.message.findFirst({
+          where: {
+            conversationId,
+            id: { not: message.id } // Exclude the message we just sent
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+        
+        const isReply = lastMessage && lastMessage.senderId !== userId
+        
+        // Determine which action types to track
+        const actionTypes = ['dm_fan'] // Always track dm_fan (any message sent)
+        if (isReply) {
+          actionTypes.push('reply_fan') // Also track reply_fan if responding to a fan
+        }
+        
+        // Find and update creator's missions for both action types
         const userMissions = await prisma.userMission.findMany({
           where: {
             userId,
             completed: false,
             expiresAt: { gt: now },
             mission: {
-              actionType: 'dm_fan',
+              actionType: { in: actionTypes },
               isActive: true,
               forCreators: true
             }
@@ -414,10 +432,14 @@ router.post('/conversations/:conversationId/messages', messageLimiter, authentic
             }
           })
         }
+        
+        if (isReply) {
+          logger.debug('[Messages] Tracked as reply to fan')
+        }
       }
     } catch (missionError) {
       // Don't fail the message send if mission tracking fails
-      logger.warn('Failed to track dm_fan mission:', missionError)
+      logger.warn('Failed to track message mission:', missionError)
     }
 
     res.status(201).json(message)
