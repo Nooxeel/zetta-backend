@@ -969,6 +969,8 @@ model Mission {
   @@index([type])
   @@index([isActive])
   @@index([forCreators])
+  @@index([type, isActive, forCreators]) // Composite for common query pattern
+  @@index([actionType, isActive])
 }
 
 enum MissionType {
@@ -1012,6 +1014,8 @@ model UserMission {
   @@index([missionId])
   @@index([expiresAt])
   @@index([completed])
+  @@index([userId, expiresAt]) // Composite for active missions query
+  @@index([userId, completed, claimed]) // Composite for unclaimed rewards
 }
 
 // ==================== BLOCK SYSTEM ====================

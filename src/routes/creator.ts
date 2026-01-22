@@ -437,7 +437,7 @@ router.post('/music', authenticate, async (req: Request, res: Response) => {
     // Invalidar caché del creador
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } })
     if (user?.username) {
-      creatorCache.delete(user.username)
+      creatorCache.delete(`creator:${user.username}`)
       logger.debug('Cache invalidated for', user.username)
     }
 
@@ -478,7 +478,7 @@ router.delete('/music/:trackId', authenticate, async (req: Request, res: Respons
     // Invalidar caché del creador
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } })
     if (user?.username) {
-      creatorCache.delete(user.username)
+      creatorCache.delete(`creator:${user.username}`)
       logger.debug('Cache invalidated for', user.username)
     }
 

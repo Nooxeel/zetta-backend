@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { PrismaClient, Mission, UserMission, Prisma } from '@prisma/client';
+import { Mission, UserMission, Prisma } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
+import prisma from '../lib/prisma';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Extend Request to include user
 interface AuthRequest extends Request {
@@ -373,15 +373,17 @@ async function assignDailyMissions(userId: string, isCreator: boolean = false) {
     selectedMissions.push(...shuffledCreator.slice(0, 2));
   }
 
-  // Assign missions
-  for (const mission of selectedMissions) {
-    await prisma.userMission.create({
-      data: {
+  // Assign missions using batch insert
+  if (selectedMissions.length > 0) {
+    const now = new Date();
+    await prisma.userMission.createMany({
+      data: selectedMissions.map(mission => ({
         userId,
         missionId: mission.id,
         expiresAt: endOfDay,
-        assignedAt: new Date()
-      }
+        assignedAt: now
+      })),
+      skipDuplicates: true
     });
   }
 }
@@ -419,15 +421,17 @@ async function assignWeeklyMissions(userId: string, isCreator: boolean = false) 
     selectedMissions.push(...shuffledCreator.slice(0, 2));
   }
 
-  // Assign missions
-  for (const mission of selectedMissions) {
-    await prisma.userMission.create({
-      data: {
+  // Assign missions using batch insert
+  if (selectedMissions.length > 0) {
+    const now = new Date();
+    await prisma.userMission.createMany({
+      data: selectedMissions.map(mission => ({
         userId,
         missionId: mission.id,
         expiresAt: endOfWeek,
-        assignedAt: new Date()
-      }
+        assignedAt: now
+      })),
+      skipDuplicates: true
     });
   }
 }
@@ -474,15 +478,17 @@ async function assignMonthlyMissions(userId: string, isCreator: boolean = false)
     selectedMissions.push(...shuffledCreator.slice(0, 2)); // 2 creator monthly missions
   }
 
-  // Assign missions
-  for (const mission of selectedMissions) {
-    await prisma.userMission.create({
-      data: {
+  // Assign missions using batch insert
+  if (selectedMissions.length > 0) {
+    const now = new Date();
+    await prisma.userMission.createMany({
+      data: selectedMissions.map(mission => ({
         userId,
         missionId: mission.id,
         expiresAt: endOfMonth,
-        assignedAt: new Date()
-      }
+        assignedAt: now
+      })),
+      skipDuplicates: true
     });
   }
 }
@@ -500,6 +506,10 @@ async function assignAchievements(userId: string, isCreator: boolean = false) {
 
   // Far future expiry for achievements (they don't expire)
   const farFuture = new Date('2099-12-31');
+  const now = new Date();
+
+  // Get all achievements to assign
+  const achievementsToAssign: { missionId: string }[] = [];
 
   // Assign fan achievements that haven't been assigned yet
   const fanAchievements = await prisma.mission.findMany({
@@ -508,14 +518,7 @@ async function assignAchievements(userId: string, isCreator: boolean = false) {
 
   for (const achievement of fanAchievements) {
     if (!existingIds.has(achievement.id)) {
-      await prisma.userMission.create({
-        data: {
-          userId,
-          missionId: achievement.id,
-          expiresAt: farFuture,
-          assignedAt: new Date()
-        }
-      });
+      achievementsToAssign.push({ missionId: achievement.id });
     }
   }
 
@@ -527,16 +530,22 @@ async function assignAchievements(userId: string, isCreator: boolean = false) {
 
     for (const achievement of creatorAchievements) {
       if (!existingIds.has(achievement.id)) {
-        await prisma.userMission.create({
-          data: {
-            userId,
-            missionId: achievement.id,
-            expiresAt: farFuture,
-            assignedAt: new Date()
-          }
-        });
+        achievementsToAssign.push({ missionId: achievement.id });
       }
     }
+  }
+
+  // Batch insert all new achievements
+  if (achievementsToAssign.length > 0) {
+    await prisma.userMission.createMany({
+      data: achievementsToAssign.map(a => ({
+        userId,
+        missionId: a.missionId,
+        expiresAt: farFuture,
+        assignedAt: now
+      })),
+      skipDuplicates: true
+    });
   }
 }
 
@@ -552,11 +561,13 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const isCreator = req.user?.isCreator || false;
     const now = new Date();
 
-    // Ensure missions are assigned (creators get extra missions)
-    await assignDailyMissions(userId, isCreator);
-    await assignWeeklyMissions(userId, isCreator);
-    await assignMonthlyMissions(userId, isCreator);
-    await assignAchievements(userId, isCreator);
+    // Ensure missions are assigned in parallel (creators get extra missions)
+    await Promise.all([
+      assignDailyMissions(userId, isCreator),
+      assignWeeklyMissions(userId, isCreator),
+      assignMonthlyMissions(userId, isCreator),
+      assignAchievements(userId, isCreator)
+    ]);
 
     // Get current missions (not expired)
     const userMissions = await prisma.userMission.findMany({

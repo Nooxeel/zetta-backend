@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { authenticate, getUserId, getUser } from '../middleware/auth';
+import prisma from '../lib/prisma';
 import { 
   checkAndAwardBadges as checkAchievements, 
   getUserLevelPerks,
@@ -9,7 +9,6 @@ import {
 } from '../services/achievementService';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ==================== INITIALIZE ON STARTUP ====================
 
@@ -37,9 +36,26 @@ async function checkAndAwardBadges(userId: string): Promise<string[]> {
   }
 }
 
+// ==================== LEVELS CACHE ====================
+// Cache FanLevel data to avoid repeated DB queries (levels rarely change)
+import { FanLevel } from '@prisma/client';
+
+let cachedLevels: FanLevel[] | null = null;
+let levelsCacheExpiry: number = 0;
+const LEVELS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function getCachedLevels(): Promise<FanLevel[]> {
+  const now = Date.now();
+  if (!cachedLevels || now > levelsCacheExpiry) {
+    cachedLevels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+    levelsCacheExpiry = now + LEVELS_CACHE_TTL;
+  }
+  return cachedLevels;
+}
+
 // Calculate user level from XP
 async function calculateLevel(xp: number): Promise<{ level: number; name: string; icon: string; color: string; nextLevel: { level: number; name: string; xpNeeded: number } | null }> {
-  const levels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+  const levels = await getCachedLevels();
   
   // If no levels exist in DB, return default level
   if (levels.length === 0) {
@@ -179,7 +195,7 @@ router.get('/my-level', authenticate, async (req: Request, res: Response) => {
     // Calculate progress within current level
     let progress = null;
     if (levelInfo.nextLevel) {
-      const levels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+      const levels = await getCachedLevels();
       const currentLevelMinXp = levels.find(l => l.level === levelInfo.level)?.minXp || 0;
       const nextLevelMinXp = levels.find(l => l.level === levelInfo.nextLevel!.level)?.minXp || currentLevelMinXp + 100;
       
@@ -228,9 +244,7 @@ router.get('/my-perks', authenticate, async (req: Request, res: Response) => {
 // Get all fan levels (with perk details)
 router.get('/levels', async (req: Request, res: Response) => {
   try {
-    const levels = await prisma.fanLevel.findMany({
-      orderBy: { level: 'asc' },
-    });
+    const levels = await getCachedLevels();
 
     // Format response with full perk details
     const formattedLevels = levels.map(level => ({
@@ -274,7 +288,7 @@ router.get('/user/:userId/badges', async (req: Request, res: Response) => {
     // Calculate progress for the public endpoint
     let progress = null;
     if (levelInfo && levelInfo.nextLevel) {
-      const levels = await prisma.fanLevel.findMany({ orderBy: { level: 'asc' } });
+      const levels = await getCachedLevels();
       const currentLevelData = levels.find(l => l.level === levelInfo.level);
       const nextLevelData = levels.find(l => l.level === levelInfo.nextLevel!.level);
       
