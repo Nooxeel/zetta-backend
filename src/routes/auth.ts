@@ -115,15 +115,21 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
         .catch(err => logger.error('Failed to send verification email:', err))
     }
 
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user.id, isCreator: user.isCreator },
-      JWT_SECRET,
-      { expiresIn: '7d' }
+    // Get client info for token tracking (same as login)
+    const userAgent = req.headers['user-agent'] || 'unknown'
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string || 'unknown'
+
+    // Generate token pair (access + refresh) - consistent with login
+    const tokenPair = await createTokenPair(
+      user.id,
+      user.isCreator,
+      userAgent,
+      ipAddress
     )
 
-    // Set httpOnly cookie
-    setTokenCookie(res, token)
+    // Set httpOnly cookies
+    setTokenCookie(res, tokenPair.accessToken)
+    setRefreshTokenCookie(res, tokenPair.refreshToken)
 
     logger.info('[REGISTER] Registration successful', { userId: user.id, username: user.username })
 
@@ -139,7 +145,8 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
         displayName: user.displayName,
         isCreator: user.isCreator
       },
-      token // Also return token for backward compatibility
+      token: tokenPair.accessToken, // For backward compatibility
+      expiresIn: tokenPair.accessTokenExpiresIn
     })
   } catch (error) {
     logger.error('[REGISTER] Registration failed with error:', error)
