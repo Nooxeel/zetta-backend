@@ -16,7 +16,8 @@ if (!JWT_SECRET) {
 export interface AuthRequest extends Request {
   userId?: string;
   isCreator?: boolean;
-  user?: { userId: string; isCreator?: boolean };
+  role?: string;
+  user?: { userId: string; isCreator?: boolean; role?: string };
 }
 
 /**
@@ -69,12 +70,13 @@ export const authenticate = async (
       return;
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator?: boolean };
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator?: boolean; role?: string };
     
     // Compatibilidad: establecer en múltiples propiedades para código existente
     (req as AuthRequest).userId = decoded.userId;
     (req as AuthRequest).isCreator = decoded.isCreator;
-    (req as AuthRequest).user = { userId: decoded.userId, isCreator: decoded.isCreator };
+    (req as AuthRequest).role = decoded.role;
+    (req as AuthRequest).user = { userId: decoded.userId, isCreator: decoded.isCreator, role: decoded.role };
     
     next();
   } catch (error) {
@@ -101,11 +103,12 @@ export const optionalAuthenticate = async (
     }
     
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator?: boolean };
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; isCreator?: boolean; role?: string };
       
       (req as AuthRequest).userId = decoded.userId;
       (req as AuthRequest).isCreator = decoded.isCreator;
-      (req as AuthRequest).user = { userId: decoded.userId, isCreator: decoded.isCreator };
+      (req as AuthRequest).role = decoded.role;
+      (req as AuthRequest).user = { userId: decoded.userId, isCreator: decoded.isCreator, role: decoded.role };
     } catch {
       // Token inválido, continuar sin userId
     }
@@ -114,6 +117,29 @@ export const optionalAuthenticate = async (
   } catch (error) {
     // En caso de error inesperado, continuar sin autenticación
     next();
+  }
+};
+
+/**
+ * Middleware para verificar que el usuario sea SUPER_ADMIN
+ * Debe usarse después de authenticate middleware
+ */
+export const requireSuperAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authReq = req as AuthRequest;
+    
+    if (!authReq.role || authReq.role !== 'SUPER_ADMIN') {
+      res.status(403).json({ error: 'Acceso denegado: Se requieren permisos de administrador' });
+      return;
+    }
+    
+    next();
+  } catch (error) {
+    res.status(403).json({ error: 'Acceso denegado' });
   }
 };
 

@@ -21,7 +21,12 @@ router.get('/creators', publicProfileLimiter, async (req: Request, res: Response
       // No filters, return popular creators
       const creators = await prisma.creator.findMany({
         where: {
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          user: {
+            role: {
+              not: 'SUPER_ADMIN' // Excluir super admins de listados públicos
+            }
+          }
         },
         include: {
           user: {
@@ -59,6 +64,11 @@ router.get('/creators', publicProfileLimiter, async (req: Request, res: Response
     const creators = await prisma.creator.findMany({
       where: {
         status: 'ACTIVE',
+        user: {
+          role: {
+            not: 'SUPER_ADMIN' // Excluir super admins de listados públicos
+          }
+        },
         interests: {
           some: {
             interestId: {
@@ -141,7 +151,12 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
       const creators = await prisma.creator.findMany({
         where: {
           status: 'ACTIVE',
-          userId: { not: userId } // Exclude own profile if creator
+          userId: { not: userId }, // Exclude own profile if creator
+          user: {
+            role: {
+              not: 'SUPER_ADMIN' // Excluir super admins de listados públicos
+            }
+          }
         },
         include: {
           user: {
@@ -189,6 +204,11 @@ router.get('/recommended', authenticate, async (req: Request, res: Response) => 
         status: 'ACTIVE',
         userId: { not: userId },
         id: { notIn: subscribedCreatorIds },
+        user: {
+          role: {
+            not: 'SUPER_ADMIN' // Excluir super admins de listados públicos
+          }
+        },
         interests: {
           some: {
             interestId: {

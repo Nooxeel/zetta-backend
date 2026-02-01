@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  USER
+  CREATOR
+  SUPER_ADMIN
+}
+
 model User {
   id                 String         @id @default(uuid())
   email              String         @unique
@@ -20,6 +26,7 @@ model User {
   backgroundGradient String?
   accentColor        String         @default("#d946ef")
   fontFamily         String         @default("Inter")
+  role               UserRole       @default(USER)
   isCreator          Boolean        @default(false)
   // Age verification fields
   birthdate          DateTime?

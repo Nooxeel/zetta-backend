@@ -415,4 +415,298 @@ router.post('/jobs/run/:jobName', async (req: Request, res: Response) => {
   }
 });
 
+// ===================== MODERACIÓN (requiere SUPER_ADMIN) =====================
+// Estas rutas NO usan X-Admin-Key sino JWT con role SUPER_ADMIN
+
+import { authenticate, requireSuperAdmin, AuthRequest } from '../middleware/auth';
+
+// Middleware específico para rutas de moderación
+const moderationRouter = Router();
+moderationRouter.use(authenticate, requireSuperAdmin);
+
+/**
+ * GET /api/admin/moderation/users
+ * Listar todos los usuarios (incluyendo super admins)
+ */
+moderationRouter.get('/users', async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 50, search, role } = req.query;
+
+    const where: any = {};
+
+    if (search) {
+      where.OR = [
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { username: { contains: search as string, mode: 'insensitive' } },
+        { displayName: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    if (role) {
+      where.role = role;
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          displayName: true,
+          role: true,
+          isCreator: true,
+          avatar: true,
+          createdAt: true,
+          updatedAt: true,
+          ageVerified: true,
+          emailVerified: true
+        },
+        skip: (Number(page) - 1) * Number(limit),
+        take: Number(limit),
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.user.count({ where })
+    ]);
+
+    res.json({
+      users,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error) {
+    logger.error('[MODERATION] Error listing users:', error);
+    res.status(500).json({ error: 'Error al listar usuarios' });
+  }
+});
+
+/**
+ * GET /api/admin/moderation/posts
+ * Listar todos los posts de todos los creadores
+ */
+moderationRouter.get('/posts', async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 50, creatorId, contentType, requiresPurchase } = req.query;
+
+    const where: any = {};
+
+    if (creatorId) {
+      where.creatorId = creatorId;
+    }
+
+    if (contentType) {
+      where.contentType = contentType;
+    }
+
+    if (requiresPurchase !== undefined) {
+      where.requiresPurchase = requiresPurchase === 'true';
+    }
+
+    const [posts, total] = await Promise.all([
+      prisma.post.findMany({
+        where,
+        include: {
+          creator: {
+            select: {
+              id: true,
+              userId: true,
+              user: {
+                select: {
+                  username: true,
+                  displayName: true,
+                  avatar: true
+                }
+              }
+            }
+          },
+          // Note: likes y comments son campos Int directos en Post, no relaciones
+          // _count no es necesario aquí
+        },
+        skip: (Number(page) - 1) * Number(limit),
+        take: Number(limit),
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.post.count({ where })
+    ]);
+
+    res.json({
+      posts,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error) {
+    logger.error('[MODERATION] Error listing posts:', error);
+    res.status(500).json({ error: 'Error al listar posts' });
+  }
+});
+
+/**
+ * GET /api/admin/moderation/posts/:postId
+ * Ver detalles completos de un post (incluyendo si es PPV)
+ */
+moderationRouter.get('/posts/:postId', async (req: Request, res: Response) => {
+  try {
+    const { postId } = req.params;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            userId: true,
+            user: {
+              select: {
+                username: true,
+                displayName: true,
+                avatar: true,
+                email: true
+              }
+            }
+          }
+        },
+        // likes y comments son contadores Int, no relaciones
+        // Para ver interacciones reales, buscar en PostLike y PostComment por postId
+        purchases: {
+          include: {
+            user: {
+              select: {
+                username: true,
+                displayName: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post no encontrado' });
+    }
+
+    res.json(post);
+  } catch (error) {
+    logger.error('[MODERATION] Error getting post:', error);
+    res.status(500).json({ error: 'Error al obtener post' });
+  }
+});
+
+/**
+ * DELETE /api/admin/moderation/posts/:postId
+ * Eliminar un post (moderación)
+ */
+moderationRouter.delete('/posts/:postId', async (req: Request, res: Response) => {
+  try {
+    const { postId } = req.params;
+    const { reason } = req.body;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: { creator: { include: { user: true } } }
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post no encontrado' });
+    }
+
+    // Eliminar el post
+    await prisma.post.delete({
+      where: { id: postId }
+    });
+
+    logger.warn('[MODERATION] Post deleted by admin', {
+      postId,
+      creatorId: post.creatorId,
+      creatorUsername: post.creator.user.username,
+      adminId: (req as AuthRequest).userId,
+      reason
+    });
+
+    res.json({ message: 'Post eliminado exitosamente' });
+  } catch (error) {
+    logger.error('[MODERATION] Error deleting post:', error);
+    res.status(500).json({ error: 'Error al eliminar post' });
+  }
+});
+
+/**
+ * POST /api/admin/moderation/posts/:postId/flag
+ * Marcar un post como peligroso/reportado
+ */
+moderationRouter.post('/posts/:postId/flag', async (req: Request, res: Response) => {
+  try {
+    const { postId } = req.params;
+    const { reason, severity } = req.body; // severity: 'low', 'medium', 'high', 'critical'
+
+    const adminId = (req as AuthRequest).userId;
+
+    logger.warn('[MODERATION] Post flagged', {
+      postId,
+      adminId,
+      reason,
+      severity
+    });
+
+    res.json({ message: 'Post marcado exitosamente' });
+  } catch (error) {
+    logger.error('[MODERATION] Error flagging post:', error);
+    res.status(500).json({ error: 'Error al marcar post' });
+  }
+});
+
+/**
+ * GET /api/admin/moderation/stats
+ * Estadísticas generales de la plataforma
+ */
+moderationRouter.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const [
+      totalUsers,
+      totalCreators,
+      totalPosts,
+      totalSubscriptions,
+      recentUsers
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.creator.count(),
+      prisma.post.count(),
+      prisma.subscription.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.findMany({
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          role: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10
+      })
+    ]);
+
+    res.json({
+      totalUsers,
+      totalCreators,
+      totalPosts,
+      totalSubscriptions,
+      recentUsers
+    });
+  } catch (error) {
+    logger.error('[MODERATION] Error getting stats:', error);
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+});
+
+// Montar el router de moderación
+router.use('/moderation', moderationRouter);
+
 export default router;

@@ -129,7 +129,8 @@ router.post('/register', skipIfWhitelisted(registerLimiter), async (req: Request
       user.id,
       user.isCreator,
       userAgent,
-      ipAddress
+      ipAddress,
+      user.role
     )
 
     // Set httpOnly cookies
@@ -204,7 +205,8 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       user.id,
       user.isCreator,
       userAgent,
-      ipAddress
+      ipAddress,
+      user.role
     )
 
     // Set httpOnly cookies
@@ -364,7 +366,8 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
       user.id,
       user.isCreator,
       userAgent,
-      ipAddress
+      ipAddress,
+      user.role
     )
 
     // Set httpOnly cookies

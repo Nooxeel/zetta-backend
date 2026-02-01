@@ -32,9 +32,9 @@ interface TokenPair {
 /**
  * Generate a new access token
  */
-export function generateAccessToken(userId: string, isCreator: boolean): string {
+export function generateAccessToken(userId: string, isCreator: boolean, role?: string): string {
   return jwt.sign(
-    { userId, isCreator },
+    { userId, isCreator, role },
     JWT_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
   )
@@ -54,9 +54,10 @@ export async function createTokenPair(
   userId: string,
   isCreator: boolean,
   userAgent?: string,
-  ipAddress?: string
+  ipAddress?: string,
+  role?: string
 ): Promise<TokenPair> {
-  const accessToken = generateAccessToken(userId, isCreator)
+  const accessToken = generateAccessToken(userId, isCreator, role)
   const refreshTokenString = generateRefreshTokenString()
   
   const expiresAt = new Date()
@@ -152,7 +153,8 @@ export async function refreshAccessToken(
   // 4. Generate new access token
   const accessToken = generateAccessToken(
     refreshToken.userId,
-    refreshToken.user.isCreator
+    refreshToken.user.isCreator,
+    refreshToken.user.role
   )
 
   logger.debug(`Refresh token rotated for user ${refreshToken.userId}`)
