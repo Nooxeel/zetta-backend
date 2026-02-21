@@ -1,84 +1,53 @@
-# Apapacho Backend - API Server
+# Zetta Reports — Backend API
 
 ## Project Overview
-Backend API para Apapacho - Plataforma de creadores de contenido.
+Backend API para Zetta Reports — sistema de reportes multi-idioma que se conecta a múltiples bases de datos SQL Server alojadas en SoMee.
 
 ## Tech Stack
 - **Runtime**: Node.js + TypeScript
 - **Framework**: Express.js 5
-- **Database**: SQLite (dev) / PostgreSQL (prod)
-- **ORM**: Prisma 5
-- **Auth**: JWT + bcryptjs
+- **Databases**: SQL Server (mssql) — múltiples conexiones simultáneas
+- **Validation**: Zod
+- **Auth**: Auth0 (planned)
 
 ## Frontend
-El frontend está en un proyecto separado: `apapacho`
+El frontend (backoffice) está en un proyecto separado: `backoffice/`
 - Frontend URL: `http://localhost:3000`
+- Stack: Next.js 16 + React 19 + shadcn/ui + TanStack Table
 
 ## Project Structure
 ```
-├── prisma/
-│   ├── schema.prisma    # Database models
-│   └── dev.db           # SQLite database
-├── src/
-│   ├── index.ts         # Express server entry
-│   ├── lib/
-│   │   └── prisma.ts    # Prisma client singleton
-│   └── routes/
-│       ├── auth.ts      # Authentication (login/register)
-│       ├── creator.ts   # Creator profile routes
-│       ├── upload.ts    # File upload routes
-│       ├── comments.ts  # Comments system
-│       ├── favorites.ts # Favorites system
-│       └── users.ts     # User/fan profile & payments
-└── uploads/             # User uploaded files (by userId)
+src/
+├── index.ts              # Express server entry point
+├── lib/
+│   ├── db.ts             # SQL Server multi-database connection manager
+│   └── logger.ts         # Structured logger
+├── middleware/            # Auth, rate limiting (to be added)
+└── routes/
+    ├── health.ts          # Health check + DB connectivity
+    ├── databases.ts       # List/test registered databases
+    └── reports.ts         # Report query endpoints
 ```
 
-## Database Models
-- **User**: Base user (fan or creator)
-- **Creator**: Creator profile with customization
-- **MusicTrack**: YouTube tracks for profiles
-- **SocialLink**: Social media links
-- **SubscriptionTier**: Subscription levels
-- **Subscription**: Active subscriptions
-- **Post**: Creator content
-- **Donation**: Tips/donations
-- **Comment**: Profile comments (need approval)
-- **Favorite**: User's favorite creators
-- **ProfileAuditLog**: Profile change history
+## Database Configuration
+Cada DB SQL Server se configura via env vars:
+```
+DB_{NAME}_SERVER=sql.somee.com
+DB_{NAME}_DATABASE=mydb
+DB_{NAME}_USER=user
+DB_{NAME}_PASSWORD=pass
+```
 
-## Main API Endpoints
-- `POST /api/auth/login` - Login
-- `POST /api/auth/register` - Register
-- `GET /api/creators` - List creators
-- `GET /api/creators/username/:username` - Get creator by username
-- `PUT /api/creators/profile` - Update creator profile (auth)
-- `GET /api/favorites` - Get user's favorites (auth)
-- `POST /api/favorites/:creatorId` - Add favorite (auth)
-- `GET /api/users/me/payments` - Payment history (auth)
-- `GET /api/users/me/stats` - User stats (auth)
-- `GET /api/comments/:creatorId` - Get approved comments (public)
-- `GET /api/comments/:creatorId/pending` - Get pending comments (creator auth)
-- `POST /api/comments/:creatorId` - Create comment (auth)
-- `PUT /api/comments/:commentId/approve` - Approve comment (creator auth)
-- `DELETE /api/comments/:commentId` - Delete comment (auth)
-- `GET /api/comments/user/my-comments` - Get user's sent comments (auth)
-
-## IMPORTANTE: Modelo Donation
-El campo del usuario que envía es `fromUserId`, NO `senderId`.
+## API Endpoints
+- `GET /api/health` — Health check
+- `GET /api/health/db` — Test all DB connections
+- `GET /api/databases` — List registered databases
+- `GET /api/databases/:name/test` — Test specific DB
+- `GET /api/reports/tables?db=name` — List tables
+- `GET /api/reports/columns?db=name&table=x` — List columns
+- `GET /api/reports/query?db=name` — Execute report (WIP)
 
 ## Development Commands
-- `npm run dev` - Start with hot reload (port 3001)
-- `npm run build` - Compile TypeScript
-- `npm run db:generate` - Generate Prisma client
-- `npm run db:push` - Sync schema with database
-- `npm run db:studio` - Open Prisma Studio
-
-## Test Users
-- **Creador**: test@apapacho.com / test1234 (username: gatitaveve)
-- **Fan**: fan@test.com / Test1234! (username: fantest)
-
-## API Base URL
-`http://localhost:3001/api`
-
-## Documentation
-Ver `DEVELOPMENT.md` para documentación completa de endpoints y modelos.
+- `npm run dev` — Start with hot reload (port 3001)
+- `npm run build` — Compile TypeScript
+- `npm start` — Run compiled version

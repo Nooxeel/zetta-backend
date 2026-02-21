@@ -19,5 +19,17 @@ build/
 *.log
 npm-debug.log*
 
+# Session docs (AI agent working files)
+/session-docs
+
+# Docker volumes
+pgdata/
+
+# IDE
+.idea/
+
+# AI agent working files
+.claude/
+
 # OS
 .DS_Store

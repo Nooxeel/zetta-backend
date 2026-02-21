@@ -1,104 +1,61 @@
-# Apapacho Backend API
+# Zetta Reports — Backend API
 
-Backend API para la plataforma Apapacho - Plataforma de creadores de contenido.
+Multi-language reporting system backend. Connects to multiple SQL Server databases (hosted on SoMee) and exposes report data via REST API.
 
 ## Tech Stack
 
-- **Runtime**: Node.js + TypeScript
-- **Framework**: Express.js
-- **Database**: SQLite (desarrollo) / PostgreSQL (producción)
-- **ORM**: Prisma
-- **Auth**: JWT + bcrypt
+| Layer | Technology |
+|-------|-----------|
+| Runtime | Node.js + TypeScript |
+| Framework | Express 5 |
+| Databases | SQL Server (mssql) — multiple connections |
+| Validation | Zod |
+| Auth | Auth0 (planned) |
+| Frontend | Next.js backoffice (separate project) |
 
-## Instalación
+## Quick Start
 
 ```bash
-# Instalar dependencias
 npm install
-
-# Generar cliente Prisma
-npm run db:generate
-
-# Crear/sincronizar base de datos
-npm run db:push
-
-# Iniciar en desarrollo
-npm run dev
+cp .env.example .env   # Fill in your database credentials
+npm run dev             # Starts on http://localhost:3001
 ```
 
-## Scripts
+## Project Structure
 
-```bash
-npm run dev        # Desarrollo con hot reload
-npm run build      # Build de producción
-npm run start      # Iniciar producción
-npm run db:generate # Generar Prisma Client
-npm run db:push    # Sincronizar schema con DB
-npm run db:migrate # Crear migraciones
-npm run db:studio  # Abrir Prisma Studio
+```
+src/
+├── index.ts              # Express server entry point
+├── lib/
+│   ├── db.ts             # SQL Server multi-database connection manager
+│   └── logger.ts         # Structured logger
+├── middleware/            # Auth, rate limiting (to be added)
+└── routes/
+    ├── health.ts          # Health check + DB connectivity
+    ├── databases.ts       # List/test registered databases
+    └── reports.ts         # Report query endpoints
+```
+
+## Database Configuration
+
+Each SQL Server database is registered via environment variables:
+
+```env
+DB_{NAME}_SERVER=sql.somee.com
+DB_{NAME}_DATABASE=mydb
+DB_{NAME}_USER=myuser
+DB_{NAME}_PASSWORD=mypassword
+DB_{NAME}_PORT=1433
 ```
 
 ## API Endpoints
 
-### Auth
-- `POST /api/auth/register` - Registrar usuario
-- `POST /api/auth/login` - Iniciar sesión
-- `GET /api/auth/me` - Usuario actual (requiere token)
-
-### Creators
-- `GET /api/creators` - Listar creadores
-- `GET /api/creators/:id` - Obtener creador por ID
-- `GET /api/creators/username/:username` - Obtener por username
-- `PUT /api/creators/profile` - Actualizar perfil (requiere token)
-- `POST /api/creators/music` - Agregar música (máx 3)
-- `DELETE /api/creators/music/:trackId` - Eliminar música
-
-### Upload
-- `POST /api/upload/avatar` - Subir foto de perfil
-- `POST /api/upload/cover` - Subir imagen de portada
-- `POST /api/upload/content` - Subir contenido (múltiples archivos)
-
-## Variables de Entorno
-
-```env
-DATABASE_URL="file:./dev.db"
-JWT_SECRET="tu-secreto-super-seguro"
-PORT=3001
-PLATFORM_COMMISSION=0.15
-```
-
-## Estructura
-
-```
-├── prisma/
-│   ├── schema.prisma    # Modelos de datos
-│   └── dev.db           # SQLite (desarrollo)
-├── src/
-│   ├── index.ts         # Entry point
-│   ├── lib/
-│   │   └── prisma.ts    # Cliente Prisma
-│   └── routes/
-│       ├── auth.ts      # Rutas de autenticación
-│       ├── creator.ts   # Rutas de creadores
-│       └── upload.ts    # Rutas de upload
-└── uploads/             # Archivos subidos (por userId)
-```
-
-## Modelos de Datos
-
-- **User** - Usuarios (fans y creadores)
-- **Creator** - Perfiles de creadores + personalización
-- **MusicTrack** - Canciones de YouTube (máx 3 por perfil)
-- **SocialLink** - Links a redes sociales
-- **SubscriptionTier** - Niveles de suscripción
-- **Subscription** - Suscripciones activas
-- **Post** - Contenido publicado
-- **Donation** - Donaciones/tips
-
-## Puerto
-
-El backend corre en `http://localhost:3001`
-
----
-
-Hecho con 💜 para Apapacho
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| GET | `/api/health/db` | Test all DB connections |
+| GET | `/api/databases` | List registered databases |
+| GET | `/api/databases/:name/test` | Test specific DB connection |
+| GET | `/api/reports/tables?db=name` | List tables in a database |
+| GET | `/api/reports/columns?db=name&table=x` | List columns of a table |
+| GET | `/api/reports/query?db=name` | Execute report query (WIP) |
