@@ -92,3 +92,24 @@ enum SyncLogStatus {
   COMPLETED
   FAILED
 }
+
+// ─── Authentication ─────────────────────────────────
+
+enum Role {
+  ADMIN
+  BASIC
+}
+
+/// Google OAuth users with role-based access
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  googleId  String   @unique @map("google_id")
+  role      Role     @default(BASIC)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}

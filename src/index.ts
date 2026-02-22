@@ -18,11 +18,15 @@ dbManager.registerFromEnv(['ESAABBIONET'])
 
 // Import routes
 import healthRoutes from './routes/health'
+import authRoutes from './routes/auth'
 import reportsRoutes from './routes/reports'
 import databasesRoutes from './routes/databases'
 import viewsRoutes from './routes/views'
 import etlRoutes from './routes/etl'
 import warehouseRoutes from './routes/warehouse'
+
+// Import auth middleware
+import { authenticate, requireRole } from './middleware/auth'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -80,13 +84,18 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 app.use(cookieParser())
 
-// ─── Routes ────────────────────────────────────────────
+// ─── Public Routes ───────────────────────────────────
 app.use('/api', healthRoutes)
-app.use('/api/reports', reportsRoutes)
-app.use('/api/databases', databasesRoutes)
-app.use('/api/views', viewsRoutes)
-app.use('/api/etl', etlRoutes)
-app.use('/api/warehouse', warehouseRoutes)
+app.use('/api/auth', authRoutes)
+
+// ─── Protected Routes (require authentication) ──────
+app.use('/api/reports', authenticate, reportsRoutes)
+app.use('/api/databases', authenticate, databasesRoutes)
+app.use('/api/views', authenticate, viewsRoutes)
+app.use('/api/warehouse', authenticate, warehouseRoutes)
+
+// ─── Admin-Only Routes ──────────────────────────────
+app.use('/api/etl', authenticate, requireRole('ADMIN'), etlRoutes)
 
 // ─── Error handling ────────────────────────────────────
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
