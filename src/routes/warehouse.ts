@@ -6,6 +6,151 @@ import { createLogger } from '../lib/logger'
 const router = Router()
 const logger = createLogger('Warehouse')
 
+// ─── Filter Engine ──────────────────────────────────────
+
+type FilterCategory = 'text' | 'number' | 'date' | 'boolean' | 'unsupported'
+
+interface ColumnFilter {
+  column: string
+  operator: string
+  value: string
+  value2?: string
+}
+
+function getFilterCategory(pgType: string): FilterCategory {
+  const upper = pgType.toUpperCase()
+  if (['SMALLINT', 'INTEGER', 'BIGINT', 'REAL', 'DOUBLE PRECISION'].includes(upper) || upper.startsWith('NUMERIC')) {
+    return 'number'
+  }
+  if (['DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMPTZ'].includes(upper)) {
+    return 'date'
+  }
+  if (upper === 'BOOLEAN') {
+    return 'boolean'
+  }
+  if (['VARCHAR', 'CHAR', 'TEXT', 'XML', 'UUID'].some(t => upper.startsWith(t))) {
+    return 'text'
+  }
+  return 'unsupported'
+}
+
+const ALLOWED_OPERATORS: Record<FilterCategory, string[]> = {
+  text: ['contains', 'equals', 'starts_with', 'ends_with', 'not_equals'],
+  number: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
+  date: ['eq', 'before', 'after', 'between'],
+  boolean: ['eq'],
+  unsupported: [],
+}
+
+function buildFilterClauses(
+  filters: ColumnFilter[],
+  columnMeta: Array<{ columnName: string; pgType: string }>,
+  startParamIndex: number
+): { clauses: string[]; params: any[]; nextIndex: number } {
+  const clauses: string[] = []
+  const params: any[] = []
+  let idx = startParamIndex
+
+  for (const filter of filters) {
+    const col = columnMeta.find(c => sanitizeIdentifier(c.columnName) === sanitizeIdentifier(filter.column))
+    if (!col) continue
+
+    const category = getFilterCategory(col.pgType)
+    const colRef = `"${sanitizeIdentifier(col.columnName)}"`
+    const castType = col.pgType
+
+    switch (category) {
+      case 'text':
+        switch (filter.operator) {
+          case 'contains':
+            params.push(`%${filter.value}%`)
+            clauses.push(`${colRef}::TEXT ILIKE $${idx++}`)
+            break
+          case 'equals':
+            params.push(filter.value)
+            clauses.push(`${colRef}::TEXT = $${idx++}`)
+            break
+          case 'starts_with':
+            params.push(`${filter.value}%`)
+            clauses.push(`${colRef}::TEXT ILIKE $${idx++}`)
+            break
+          case 'ends_with':
+            params.push(`%${filter.value}`)
+            clauses.push(`${colRef}::TEXT ILIKE $${idx++}`)
+            break
+          case 'not_equals':
+            params.push(filter.value)
+            clauses.push(`${colRef}::TEXT != $${idx++}`)
+            break
+        }
+        break
+
+      case 'number':
+        switch (filter.operator) {
+          case 'eq':
+            params.push(filter.value)
+            clauses.push(`${colRef} = $${idx++}::${castType}`)
+            break
+          case 'neq':
+            params.push(filter.value)
+            clauses.push(`${colRef} != $${idx++}::${castType}`)
+            break
+          case 'gt':
+            params.push(filter.value)
+            clauses.push(`${colRef} > $${idx++}::${castType}`)
+            break
+          case 'gte':
+            params.push(filter.value)
+            clauses.push(`${colRef} >= $${idx++}::${castType}`)
+            break
+          case 'lt':
+            params.push(filter.value)
+            clauses.push(`${colRef} < $${idx++}::${castType}`)
+            break
+          case 'lte':
+            params.push(filter.value)
+            clauses.push(`${colRef} <= $${idx++}::${castType}`)
+            break
+          case 'between':
+            params.push(filter.value, filter.value2)
+            clauses.push(`${colRef} BETWEEN $${idx++}::${castType} AND $${idx++}::${castType}`)
+            break
+        }
+        break
+
+      case 'date':
+        switch (filter.operator) {
+          case 'eq':
+            params.push(filter.value)
+            clauses.push(`${colRef}::DATE = $${idx++}::DATE`)
+            break
+          case 'before':
+            params.push(filter.value)
+            clauses.push(`${colRef} < $${idx++}::${castType}`)
+            break
+          case 'after':
+            params.push(filter.value)
+            clauses.push(`${colRef} > $${idx++}::${castType}`)
+            break
+          case 'between':
+            params.push(filter.value, filter.value2)
+            clauses.push(`${colRef} BETWEEN $${idx++}::${castType} AND $${idx++}::${castType}`)
+            break
+        }
+        break
+
+      case 'boolean':
+        params.push(filter.value === 'true')
+        clauses.push(`${colRef} = $${idx++}::BOOLEAN`)
+        break
+    }
+  }
+
+  return { clauses, params, nextIndex: idx }
+}
+
+// ─── Routes ─────────────────────────────────────────────
+
 /**
  * GET /api/warehouse/tables
  *
@@ -40,7 +185,7 @@ router.get('/tables', async (_req: Request, res: Response) => {
 /**
  * GET /api/warehouse/columns
  *
- * Get columns for a synced table.
+ * Get columns for a synced table (includes filterCategory for frontend).
  * Query params: syncedViewId
  */
 router.get('/columns', async (req: Request, res: Response) => {
@@ -63,6 +208,7 @@ router.get('/columns', async (req: Request, res: Response) => {
         sqlType: c.sqlServerType,
         pgType: c.pgType,
         nullable: c.isNullable,
+        filterCategory: getFilterCategory(c.pgType),
       })),
       count: columns.length,
     })
@@ -75,16 +221,12 @@ router.get('/columns', async (req: Request, res: Response) => {
 /**
  * GET /api/warehouse/data
  *
- * Query synced PostgreSQL data with pagination, search, and sorting.
- * Returns the same response shape as /api/views/data for frontend reuse.
+ * Query synced PostgreSQL data with pagination, search, sorting, and column filters.
  *
  * Query params:
  *   - syncedViewId: ID of the synced view
- *   - page: page number (default: 1)
- *   - pageSize: rows per page (default: 50, max: 500)
- *   - search: global search term (LIKE across text columns)
- *   - sortBy: column name to sort by
- *   - sortOrder: 'asc' or 'desc' (default: 'asc')
+ *   - page, pageSize, search, sortBy, sortOrder (existing)
+ *   - filters: JSON array of { column, operator, value, value2? }
  */
 router.get('/data', async (req: Request, res: Response) => {
   const {
@@ -94,11 +236,24 @@ router.get('/data', async (req: Request, res: Response) => {
     search,
     sortBy,
     sortOrder: sortOrderParam,
+    filters: filtersRaw,
   } = req.query
 
   if (!syncedViewId || typeof syncedViewId !== 'string') {
     res.status(400).json({ error: 'Missing required query param: syncedViewId' })
     return
+  }
+
+  // Parse filters
+  let parsedFilters: ColumnFilter[] = []
+  if (filtersRaw && typeof filtersRaw === 'string') {
+    try {
+      const arr = JSON.parse(filtersRaw)
+      if (Array.isArray(arr)) parsedFilters = arr
+    } catch {
+      res.status(400).json({ error: 'Invalid filters JSON' })
+      return
+    }
   }
 
   const page = Math.max(1, parseInt(pageParam as string, 10) || 1)
@@ -107,7 +262,6 @@ router.get('/data', async (req: Request, res: Response) => {
   const sortOrder = (typeof sortOrderParam === 'string' && sortOrderParam.toLowerCase() === 'desc') ? 'DESC' : 'ASC'
 
   try {
-    // Fetch synced view metadata
     const syncedView = await prisma.syncedView.findUnique({
       where: { id: syncedViewId },
       include: {
@@ -135,54 +289,75 @@ router.get('/data', async (req: Request, res: Response) => {
       validatedSortBy = sanitizedSort
     }
 
-    // Build search WHERE clause
+    // Validate filter columns and operators
+    const columnMeta = columns.map(c => ({ columnName: c.columnName, pgType: c.pgType }))
+    for (const f of parsedFilters) {
+      const col = columnMeta.find(c => sanitizeIdentifier(c.columnName) === sanitizeIdentifier(f.column))
+      if (!col) {
+        res.status(400).json({ error: `Invalid filter column: "${f.column}"` })
+        return
+      }
+      const category = getFilterCategory(col.pgType)
+      if (!ALLOWED_OPERATORS[category].includes(f.operator)) {
+        res.status(400).json({ error: `Invalid operator "${f.operator}" for column "${f.column}" (${category})` })
+        return
+      }
+    }
+
+    // Build WHERE conditions
+    const allConditions: string[] = []
+    const queryParams: any[] = []
+    let paramIdx = 1
+
+    // Global search
     const textPgTypes = ['VARCHAR', 'TEXT', 'CHAR', 'XML', 'UUID']
     const textColumns = columns.filter(c => textPgTypes.some(t => c.pgType.toUpperCase().startsWith(t)))
     const searchTerm = (typeof search === 'string' && search.trim()) ? search.trim() : null
 
-    let whereClause = ''
-    const queryParams: any[] = []
-
     if (searchTerm && textColumns.length > 0) {
-      const conditions = textColumns.map(c => {
+      const searchConditions = textColumns.map(c => {
         queryParams.push(`%${searchTerm}%`)
-        return `"${sanitizeIdentifier(c.columnName)}"::TEXT ILIKE $${queryParams.length}`
+        return `"${sanitizeIdentifier(c.columnName)}"::TEXT ILIKE $${paramIdx++}`
       }).join(' OR ')
-      whereClause = `WHERE (${conditions})`
+      allConditions.push(`(${searchConditions})`)
     }
 
-    // Build ORDER BY
+    // Column-specific filters
+    if (parsedFilters.length > 0) {
+      const filterResult = buildFilterClauses(parsedFilters, columnMeta, paramIdx)
+      queryParams.push(...filterResult.params)
+      allConditions.push(...filterResult.clauses)
+      paramIdx = filterResult.nextIndex
+    }
+
+    const whereClause = allConditions.length > 0 ? `WHERE ${allConditions.join(' AND ')}` : ''
+
+    // ORDER BY
     const orderClause = validatedSortBy
       ? `ORDER BY "${validatedSortBy}" ${sortOrder}`
       : 'ORDER BY _etl_id'
 
-    // Data query
-    const dataParamOffset = queryParams.length + 1
+    // Data query with pagination
     queryParams.push(pageSize, offset)
-
     const dataResult: any[] = await prisma.$queryRawUnsafe(
-      `SELECT * FROM etl."${pgTableName}" ${whereClause} ${orderClause} LIMIT $${dataParamOffset} OFFSET $${dataParamOffset + 1}`,
+      `SELECT * FROM etl."${pgTableName}" ${whereClause} ${orderClause} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       ...queryParams
     )
 
-    // Count query
-    const countParams = searchTerm && textColumns.length > 0
-      ? queryParams.slice(0, queryParams.length - 2)
-      : []
-
+    // Count query (without pagination params)
+    const countParams = queryParams.slice(0, queryParams.length - 2)
     const countResult: any[] = await prisma.$queryRawUnsafe(
       `SELECT COUNT(*)::INTEGER AS total FROM etl."${pgTableName}" ${whereClause}`,
       ...countParams
     )
     const totalRows = countResult[0]?.total || 0
 
-    // Strip internal ETL columns from response
+    // Strip internal ETL columns
     const cleanData = dataResult.map(row => {
       const { _etl_id, _etl_synced_at, ...rest } = row
       return rest
     })
 
-    // Response matches /api/views/data shape for frontend reuse
     res.json({
       database: `${syncedView.source.dbName} (PostgreSQL)`,
       view: syncedView.sourceView,
