@@ -6,6 +6,23 @@ import { createLogger } from '../lib/logger'
 const router = Router()
 const logger = createLogger('Views')
 
+// Whitelist of allowed views — only these are exposed via the API
+const ALLOWED_VIEWS: string[] = [
+  'Kardex_Producto_Top_Periodo',
+  'vw_detalle_recepcion_hh',
+  'vw_encabezado_recepcion',
+  'vw_max_lineaRecepcion_serie',
+  'VW_SHS_KARDEX_ENRIQUECIDO',
+  'VW_SHS_MAESTRO_PRODUCTOS_LIEQ',
+  'VW_SHS_RPT01_QTY_RECIBIDAS_MES_LINEA',
+  'VW_SHS_RPT02_QTY_CONSUMIDAS_MES_LINEA',
+  'VW_SHS_RPT03_TOP10_ROTACION_12M_LINEA',
+  'VW_SHS_RPT04_QTY_VENCIDAS_MES_LINEA',
+  'VW_SHS_RPT05_QTY_PROX_VENCER_LINEA',
+  'VW_SHS_SALDOS_ENRIQUECIDO',
+  'VW_SHS_STOCK_POR_LOTE_DESDE_KARDEX',
+]
+
 // --- Helper types & functions for TypeScript interface generation ---
 
 interface ColumnMeta {
@@ -121,10 +138,15 @@ router.get('/', async (req: Request, res: Response) => {
       ORDER BY TABLE_SCHEMA, TABLE_NAME
     `)
 
+    // Filter to only allowed views
+    const filtered = result.recordset.filter(
+      (v: any) => ALLOWED_VIEWS.includes(v.name)
+    )
+
     res.json({
       database: db,
-      views: result.recordset,
-      count: result.recordset.length,
+      views: filtered,
+      count: filtered.length,
     })
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to list views', details: error.message })
@@ -260,6 +282,12 @@ router.get('/data', async (req: Request, res: Response) => {
 
   try {
     const pool = await dbManager.getPool(db)
+
+    // 0. Check against allowed views whitelist
+    if (!ALLOWED_VIEWS.includes(view)) {
+      res.status(404).json({ error: `View "${schema}.${view}" not found` })
+      return
+    }
 
     // 1. Validate view exists in INFORMATION_SCHEMA (whitelist approach)
     const viewCheck = await pool.request()
