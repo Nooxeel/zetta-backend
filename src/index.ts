@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser'
 import dotenv from 'dotenv'
 import { createLogger } from './lib/logger'
 import dbManager from './lib/db'
-import prisma from './lib/prisma'
+import prisma, { ensureEtlSchema } from './lib/prisma'
 
 // Load environment variables
 dotenv.config()
@@ -47,6 +47,8 @@ app.use(cors({
 
     if (allowedOrigins.includes(origin)) {
       callback(null, true)
+    } else if (origin && origin.endsWith('.vercel.app')) {
+      callback(null, true) // Allow Vercel preview deployments
     } else if (process.env.NODE_ENV === 'development') {
       callback(null, true) // Allow all in dev
     } else {
@@ -93,9 +95,17 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 })
 
 // ─── Start ─────────────────────────────────────────────
-app.listen(PORT, () => {
-  logger.info(`🚀 Zetta Reports API running on http://localhost:${PORT}`)
-  logger.info(`   Environment: ${process.env.NODE_ENV || 'development'}`)
+async function start() {
+  await ensureEtlSchema()
+  app.listen(PORT, () => {
+    logger.info(`🚀 Zetta Reports API running on port ${PORT}`)
+    logger.info(`   Environment: ${process.env.NODE_ENV || 'development'}`)
+  })
+}
+
+start().catch((err) => {
+  logger.error('Failed to start server:', err)
+  process.exit(1)
 })
 
 // ─── Graceful shutdown ─────────────────────────────────

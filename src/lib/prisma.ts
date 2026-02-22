@@ -22,4 +22,18 @@ if (process.env.NODE_ENV === 'development') {
   })
 }
 
+/**
+ * Ensure the etl schema exists in PostgreSQL.
+ * Prisma manages the public schema; the etl schema is for dynamic ETL tables.
+ */
+export async function ensureEtlSchema(): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe('CREATE SCHEMA IF NOT EXISTS etl')
+    logger.info('ETL schema ensured')
+  } catch (error) {
+    logger.error('Failed to ensure ETL schema:', error)
+    throw error
+  }
+}
+
 export default prisma
