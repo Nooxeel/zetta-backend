@@ -301,7 +301,8 @@ export async function syncView(
 
 /**
  * Insert a batch of rows into the ETL table using a multi-value INSERT.
- * Column names are sanitized; values are parameterized via $1, $2, ... placeholders.
+ * Column names are sanitized; values are parameterized via $1::TYPE placeholders
+ * with explicit casts so PostgreSQL can handle text-to-type conversion.
  */
 async function insertBatch(
   pgTableName: string,
@@ -309,6 +310,9 @@ async function insertBatch(
   rows: Record<string, any>[]
 ): Promise<void> {
   if (rows.length === 0) return
+
+  // Pre-compute PG types for each column (for explicit casts)
+  const pgTypes = columns.map(c => buildPgColumnType(c.sqlServerType, c.maxLength))
 
   const colNames = columns
     .map(c => `"${sanitizeIdentifier(c.columnName)}"`)
@@ -319,9 +323,9 @@ async function insertBatch(
 
   for (const row of rows) {
     const placeholders: string[] = []
-    for (const col of columns) {
-      values.push(row[col.columnName] ?? null)
-      placeholders.push(`$${values.length}`)
+    for (let j = 0; j < columns.length; j++) {
+      values.push(row[columns[j].columnName] ?? null)
+      placeholders.push(`$${values.length}::${pgTypes[j]}`)
     }
     rowPlaceholders.push(`(${placeholders.join(', ')})`)
   }
