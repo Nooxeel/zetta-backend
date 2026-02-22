@@ -7,7 +7,7 @@ const router = Router()
 const logger = createLogger('Views')
 
 // Whitelist of allowed views — only these are exposed via the API
-const ALLOWED_VIEWS: string[] = [
+export const ALLOWED_VIEWS: string[] = [
   'Kardex_Producto_Top_Periodo',
   'vw_detalle_recepcion_hh',
   'vw_encabezado_recepcion',

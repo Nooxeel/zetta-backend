@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 import { syncView, SyncConflictError } from '../services/etl.service'
 import { dropEtlTable } from '../services/dynamicTable.service'
+import { ALLOWED_VIEWS } from './views'
 import { createLogger } from '../lib/logger'
 
 const router = Router()
@@ -48,6 +49,75 @@ router.post('/sync', async (req: Request, res: Response) => {
     logger.error('Sync failed:', error)
     res.status(500).json({ error: 'Sync failed', details: error.message })
   }
+})
+
+/**
+ * GET /api/etl/sync-all
+ *
+ * Sync ALL allowed views via Server-Sent Events (SSE).
+ * Streams progress in real-time as each view completes.
+ *
+ * Query params:
+ *   - db: database name (registered in dbManager)
+ */
+router.get('/sync-all', async (req: Request, res: Response) => {
+  const { db } = req.query
+
+  if (!db || typeof db !== 'string') {
+    res.status(400).json({ error: 'Missing required query param: db' })
+    return
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  const views = ALLOWED_VIEWS.map(name => ({ schema: 'dbo', name }))
+  const total = views.length
+
+  const sendEvent = (data: Record<string, unknown>) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  }
+
+  sendEvent({ type: 'start', total, views: views.map(v => v.name) })
+
+  let successCount = 0
+  let failCount = 0
+
+  for (let i = 0; i < views.length; i++) {
+    const view = views[i]
+    sendEvent({ type: 'progress', current: i + 1, total, view: view.name, status: 'syncing' })
+
+    try {
+      const result = await syncView(db, view.schema, view.name)
+      successCount++
+      sendEvent({
+        type: 'progress',
+        current: i + 1,
+        total,
+        view: view.name,
+        status: 'success',
+        rowsSynced: result.rowsSynced,
+        durationMs: result.durationMs,
+      })
+    } catch (error: any) {
+      failCount++
+      sendEvent({
+        type: 'progress',
+        current: i + 1,
+        total,
+        view: view.name,
+        status: 'failed',
+        error: error.message,
+      })
+    }
+  }
+
+  sendEvent({ type: 'complete', total, successCount, failCount })
+  res.end()
 })
 
 /**
