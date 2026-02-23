@@ -141,29 +141,30 @@ router.get('/business-kpis', async (_req: Request, res: Response) => {
     ])
 
     // ── KPI Cards ───────────────────────────────────────
+    // NOTE: PG columns are lowercase (no quotes needed)
     const kpiSaldos = tSaldos
       ? prisma.$queryRawUnsafe<any[]>(`
           SELECT
-            COALESCE(SUM("ExistenciaFisica"), 0)             AS "totalStockFisico",
-            COALESCE(SUM("Disponible"), 0)                   AS "totalStockDisponible",
-            COUNT(DISTINCT "CodigoProducto")                  AS "productosUnicos",
-            COUNT(DISTINCT "LIEQ_Cod") FILTER (WHERE "LIEQ_Cod" IS NOT NULL) AS "lineasProducto"
+            COALESCE(SUM(existenciafisica), 0)             AS "totalStockFisico",
+            COALESCE(SUM(disponible), 0)                   AS "totalStockDisponible",
+            COUNT(DISTINCT codigoproducto)                  AS "productosUnicos",
+            COUNT(DISTINCT lieq_cod) FILTER (WHERE lieq_cod IS NOT NULL) AS "lineasProducto"
           FROM ${tSaldos}
         `)
       : Promise.resolve([{ totalStockFisico: 0, totalStockDisponible: 0, productosUnicos: 0, lineasProducto: 0 }])
 
     const kpiProxVencer = tRpt05
       ? prisma.$queryRawUnsafe<any[]>(`
-          SELECT COALESCE(SUM("FIS_VenceEn_90"), 0) AS "proxVencer90d"
+          SELECT COALESCE(SUM(fis_venceen_90), 0) AS "proxVencer90d"
           FROM ${tRpt05}
         `)
       : Promise.resolve([{ proxVencer90d: 0 }])
 
     const kpiVencidas = tRpt04
       ? prisma.$queryRawUnsafe<any[]>(`
-          SELECT COALESCE(SUM("QtyVencidas_ExistenciaFisica"), 0) AS "vencidasUltimoMes"
+          SELECT COALESCE(SUM(qtyvencidas_existenciafisica), 0) AS "vencidasUltimoMes"
           FROM ${tRpt04}
-          WHERE "MesVencimiento" = (SELECT MAX("MesVencimiento") FROM ${tRpt04})
+          WHERE mesvencimiento = (SELECT MAX(mesvencimiento) FROM ${tRpt04})
         `)
       : Promise.resolve([{ vencidasUltimoMes: 0 }])
 
@@ -175,14 +176,14 @@ router.get('/business-kpis', async (_req: Request, res: Response) => {
             COALESCE(r.recibido, 0)                         AS "recibido",
             COALESCE(c.consumido, 0)                        AS "consumido"
           FROM (
-            SELECT "MesMovimiento" AS mes, SUM("QtyRecibidas") AS recibido
+            SELECT mesmovimiento AS mes, SUM(qtyrecibidas) AS recibido
             FROM ${tRpt01}
-            GROUP BY "MesMovimiento"
+            GROUP BY mesmovimiento
           ) r
           FULL OUTER JOIN (
-            SELECT "MesMovimiento" AS mes, SUM("QtyConsumidas") AS consumido
+            SELECT mesmovimiento AS mes, SUM(qtyconsumidas) AS consumido
             FROM ${tRpt02}
-            GROUP BY "MesMovimiento"
+            GROUP BY mesmovimiento
           ) c ON r.mes = c.mes
           ORDER BY COALESCE(r.mes, c.mes)
         `)
@@ -192,17 +193,17 @@ router.get('/business-kpis', async (_req: Request, res: Response) => {
     const chartAlertas = tRpt05
       ? prisma.$queryRawUnsafe<any[]>(`
           SELECT
-            "LIEQ_Cod"            AS "lineaCod",
-            "LIEQ_Desc"           AS "lineaDesc",
-            COALESCE("FIS_Bucket_0_30", 0)   AS "bucket_0_30",
-            COALESCE("FIS_Bucket_31_60", 0)  AS "bucket_31_60",
-            COALESCE("FIS_Bucket_61_90", 0)  AS "bucket_61_90",
-            COALESCE("FIS_Bucket_91_120", 0) AS "bucket_91_120",
-            COALESCE("FIS_Bucket_121_150", 0) AS "bucket_121_150",
-            COALESCE("FIS_Bucket_151_180", 0) AS "bucket_151_180"
+            lieq_cod            AS "lineaCod",
+            lieq_desc           AS "lineaDesc",
+            COALESCE(fis_bucket_0_30, 0)   AS "bucket_0_30",
+            COALESCE(fis_bucket_31_60, 0)  AS "bucket_31_60",
+            COALESCE(fis_bucket_61_90, 0)  AS "bucket_61_90",
+            COALESCE(fis_bucket_91_120, 0) AS "bucket_91_120",
+            COALESCE(fis_bucket_121_150, 0) AS "bucket_121_150",
+            COALESCE(fis_bucket_151_180, 0) AS "bucket_151_180"
           FROM ${tRpt05}
-          WHERE "LIEQ_Cod" IS NOT NULL
-          ORDER BY COALESCE("FIS_VenceEn_90", 0) DESC
+          WHERE lieq_cod IS NOT NULL
+          ORDER BY COALESCE(fis_venceen_90, 0) DESC
         `)
       : Promise.resolve([])
 
@@ -210,13 +211,13 @@ router.get('/business-kpis', async (_req: Request, res: Response) => {
     const chartRotacion = tRpt03
       ? prisma.$queryRawUnsafe<any[]>(`
           SELECT
-            "CodigoProducto"   AS "codigo",
-            "Descripcion"      AS "descripcion",
-            "LIEQ_Desc"        AS "lineaDesc",
-            COALESCE("QtyConsumida_12M", 0) AS "qtyConsumida12M",
-            "RankingEnLinea"   AS "ranking"
+            codigoproducto   AS "codigo",
+            descripcion      AS "descripcion",
+            lieq_desc        AS "lineaDesc",
+            COALESCE(qtyconsumida_12m, 0) AS "qtyConsumida12M",
+            rankingenlinea   AS "ranking"
           FROM ${tRpt03}
-          ORDER BY "QtyConsumida_12M" DESC NULLS LAST
+          ORDER BY qtyconsumida_12m DESC NULLS LAST
           LIMIT 10
         `)
       : Promise.resolve([])
@@ -225,14 +226,14 @@ router.get('/business-kpis', async (_req: Request, res: Response) => {
     const chartStockLinea = tSaldos
       ? prisma.$queryRawUnsafe<any[]>(`
           SELECT
-            "LIEQ_Cod"  AS "lineaCod",
-            "LIEQ_Desc" AS "lineaDesc",
-            COALESCE(SUM("ExistenciaFisica"), 0) AS "stockFisico",
-            COALESCE(SUM("Disponible"), 0)       AS "stockDisponible"
+            lieq_cod  AS "lineaCod",
+            lieq_desc AS "lineaDesc",
+            COALESCE(SUM(existenciafisica), 0) AS "stockFisico",
+            COALESCE(SUM(disponible), 0)       AS "stockDisponible"
           FROM ${tSaldos}
-          WHERE "LIEQ_Cod" IS NOT NULL
-          GROUP BY "LIEQ_Cod", "LIEQ_Desc"
-          ORDER BY SUM("ExistenciaFisica") DESC NULLS LAST
+          WHERE lieq_cod IS NOT NULL
+          GROUP BY lieq_cod, lieq_desc
+          ORDER BY SUM(existenciafisica) DESC NULLS LAST
         `)
       : Promise.resolve([])
 
@@ -240,12 +241,12 @@ router.get('/business-kpis', async (_req: Request, res: Response) => {
     const chartHistVencidos = tRpt04
       ? prisma.$queryRawUnsafe<any[]>(`
           SELECT
-            "MesVencimiento"                                  AS "mes",
-            COALESCE(SUM("QtyVencidas_ExistenciaFisica"), 0)  AS "vencidasFisica",
-            COALESCE(SUM("QtyVencidas_Disponible"), 0)        AS "vencidasDisponible"
+            mesvencimiento                                  AS "mes",
+            COALESCE(SUM(qtyvencidas_existenciafisica), 0)  AS "vencidasFisica",
+            COALESCE(SUM(qtyvencidas_disponible), 0)        AS "vencidasDisponible"
           FROM ${tRpt04}
-          GROUP BY "MesVencimiento"
-          ORDER BY "MesVencimiento"
+          GROUP BY mesvencimiento
+          ORDER BY mesvencimiento
         `)
       : Promise.resolve([])
 
