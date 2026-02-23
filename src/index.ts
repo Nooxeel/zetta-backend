@@ -25,6 +25,7 @@ import viewsRoutes from './routes/views'
 import etlRoutes from './routes/etl'
 import warehouseRoutes from './routes/warehouse'
 import adminRoutes from './routes/admin'
+import statsRoutes from './routes/stats'
 
 // Import auth middleware
 import { authenticate, requireRole } from './middleware/auth'
@@ -94,6 +95,7 @@ app.use('/api/reports', authenticate, reportsRoutes)
 app.use('/api/databases', authenticate, databasesRoutes)
 app.use('/api/views', authenticate, viewsRoutes)
 app.use('/api/warehouse', authenticate, warehouseRoutes)
+app.use('/api/stats', authenticate, statsRoutes)
 
 // ─── Admin-Only Routes ──────────────────────────────
 app.use('/api/etl', authenticate, requireRole('ADMIN'), etlRoutes)
