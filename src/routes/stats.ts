@@ -110,4 +110,218 @@ router.get('/warehouse-overview', async (_req: Request, res: Response) => {
   }
 })
 
+/**
+ * Helper: resolve a source_view name to its pg_table_name.
+ * Returns null if the view isn't synced yet.
+ */
+async function getPgTable(sourceView: string): Promise<string | null> {
+  const sv = await prisma.syncedView.findFirst({
+    where: { sourceView, status: 'SYNCED' },
+    select: { pgTableName: true },
+  })
+  return sv ? `etl."${sv.pgTableName}"` : null
+}
+
+/**
+ * GET /api/stats/business-kpis
+ *
+ * Returns business KPIs and chart data derived from
+ * the synced warehouse views (pharma/healthcare domain).
+ */
+router.get('/business-kpis', async (_req: Request, res: Response) => {
+  try {
+    // Resolve table names dynamically
+    const [tSaldos, tRpt01, tRpt02, tRpt03, tRpt04, tRpt05] = await Promise.all([
+      getPgTable('VW_SHS_SALDOS_ENRIQUECIDO'),
+      getPgTable('VW_SHS_RPT01_QTY_RECIBIDAS_MES_LINEA'),
+      getPgTable('VW_SHS_RPT02_QTY_CONSUMIDAS_MES_LINEA'),
+      getPgTable('VW_SHS_RPT03_TOP10_ROTACION_12M_LINEA'),
+      getPgTable('VW_SHS_RPT04_QTY_VENCIDAS_MES_LINEA'),
+      getPgTable('VW_SHS_RPT05_QTY_PROX_VENCER_LINEA'),
+    ])
+
+    // ── KPI Cards ───────────────────────────────────────
+    const kpiSaldos = tSaldos
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            COALESCE(SUM("ExistenciaFisica"), 0)             AS "totalStockFisico",
+            COALESCE(SUM("Disponible"), 0)                   AS "totalStockDisponible",
+            COUNT(DISTINCT "CodigoProducto")                  AS "productosUnicos",
+            COUNT(DISTINCT "LIEQ_Cod") FILTER (WHERE "LIEQ_Cod" IS NOT NULL) AS "lineasProducto"
+          FROM ${tSaldos}
+        `)
+      : Promise.resolve([{ totalStockFisico: 0, totalStockDisponible: 0, productosUnicos: 0, lineasProducto: 0 }])
+
+    const kpiProxVencer = tRpt05
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT COALESCE(SUM("FIS_VenceEn_90"), 0) AS "proxVencer90d"
+          FROM ${tRpt05}
+        `)
+      : Promise.resolve([{ proxVencer90d: 0 }])
+
+    const kpiVencidas = tRpt04
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT COALESCE(SUM("QtyVencidas_ExistenciaFisica"), 0) AS "vencidasUltimoMes"
+          FROM ${tRpt04}
+          WHERE "MesVencimiento" = (SELECT MAX("MesVencimiento") FROM ${tRpt04})
+        `)
+      : Promise.resolve([{ vencidasUltimoMes: 0 }])
+
+    // ── Chart: Recibido vs Consumido por Mes ────────────
+    const chartRecibidoConsumido = (tRpt01 && tRpt02)
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            COALESCE(r.mes, c.mes)                          AS "mes",
+            COALESCE(r.recibido, 0)                         AS "recibido",
+            COALESCE(c.consumido, 0)                        AS "consumido"
+          FROM (
+            SELECT "MesMovimiento" AS mes, SUM("QtyRecibidas") AS recibido
+            FROM ${tRpt01}
+            GROUP BY "MesMovimiento"
+          ) r
+          FULL OUTER JOIN (
+            SELECT "MesMovimiento" AS mes, SUM("QtyConsumidas") AS consumido
+            FROM ${tRpt02}
+            GROUP BY "MesMovimiento"
+          ) c ON r.mes = c.mes
+          ORDER BY COALESCE(r.mes, c.mes)
+        `)
+      : Promise.resolve([])
+
+    // ── Chart: Alertas de Vencimiento por Línea ─────────
+    const chartAlertas = tRpt05
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            "LIEQ_Cod"            AS "lineaCod",
+            "LIEQ_Desc"           AS "lineaDesc",
+            COALESCE("FIS_Bucket_0_30", 0)   AS "bucket_0_30",
+            COALESCE("FIS_Bucket_31_60", 0)  AS "bucket_31_60",
+            COALESCE("FIS_Bucket_61_90", 0)  AS "bucket_61_90",
+            COALESCE("FIS_Bucket_91_120", 0) AS "bucket_91_120",
+            COALESCE("FIS_Bucket_121_150", 0) AS "bucket_121_150",
+            COALESCE("FIS_Bucket_151_180", 0) AS "bucket_151_180"
+          FROM ${tRpt05}
+          WHERE "LIEQ_Cod" IS NOT NULL
+          ORDER BY COALESCE("FIS_VenceEn_90", 0) DESC
+        `)
+      : Promise.resolve([])
+
+    // ── Chart: Top 10 Rotación ──────────────────────────
+    const chartRotacion = tRpt03
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            "CodigoProducto"   AS "codigo",
+            "Descripcion"      AS "descripcion",
+            "LIEQ_Desc"        AS "lineaDesc",
+            COALESCE("QtyConsumida_12M", 0) AS "qtyConsumida12M",
+            "RankingEnLinea"   AS "ranking"
+          FROM ${tRpt03}
+          ORDER BY "QtyConsumida_12M" DESC NULLS LAST
+          LIMIT 10
+        `)
+      : Promise.resolve([])
+
+    // ── Chart: Stock por Línea ──────────────────────────
+    const chartStockLinea = tSaldos
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            "LIEQ_Cod"  AS "lineaCod",
+            "LIEQ_Desc" AS "lineaDesc",
+            COALESCE(SUM("ExistenciaFisica"), 0) AS "stockFisico",
+            COALESCE(SUM("Disponible"), 0)       AS "stockDisponible"
+          FROM ${tSaldos}
+          WHERE "LIEQ_Cod" IS NOT NULL
+          GROUP BY "LIEQ_Cod", "LIEQ_Desc"
+          ORDER BY SUM("ExistenciaFisica") DESC NULLS LAST
+        `)
+      : Promise.resolve([])
+
+    // ── Chart: Historial de Vencidos ────────────────────
+    const chartHistVencidos = tRpt04
+      ? prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            "MesVencimiento"                                  AS "mes",
+            COALESCE(SUM("QtyVencidas_ExistenciaFisica"), 0)  AS "vencidasFisica",
+            COALESCE(SUM("QtyVencidas_Disponible"), 0)        AS "vencidasDisponible"
+          FROM ${tRpt04}
+          GROUP BY "MesVencimiento"
+          ORDER BY "MesVencimiento"
+        `)
+      : Promise.resolve([])
+
+    // Execute all in parallel
+    const [
+      saldosKpi, proxKpi, vencidasKpi,
+      recConsData, alertasData, rotacionData, stockLineaData, histVencData,
+    ] = await Promise.all([
+      kpiSaldos, kpiProxVencer, kpiVencidas,
+      chartRecibidoConsumido, chartAlertas, chartRotacion, chartStockLinea, chartHistVencidos,
+    ])
+
+    const s = saldosKpi[0] || {}
+
+    // Format month labels
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    function formatMes(d: any): { mes: string; mesLabel: string } {
+      if (!d) return { mes: '', mesLabel: '' }
+      const date = new Date(d)
+      const y = date.getFullYear()
+      const m = date.getMonth()
+      return {
+        mes: `${y}-${String(m + 1).padStart(2, '0')}`,
+        mesLabel: `${meses[m]} ${y}`,
+      }
+    }
+
+    res.json({
+      kpis: {
+        totalStockFisico: Number(s.totalStockFisico) || 0,
+        totalStockDisponible: Number(s.totalStockDisponible) || 0,
+        productosUnicosEnStock: Number(s.productosUnicos) || 0,
+        lineasProductoActivas: Number(s.lineasProducto) || 0,
+        unidadesProxVencer90d: Number(proxKpi[0]?.proxVencer90d) || 0,
+        unidadesVencidasUltimoMes: Number(vencidasKpi[0]?.vencidasUltimoMes) || 0,
+      },
+      charts: {
+        recibidoVsConsumido: recConsData.map((r: any) => ({
+          ...formatMes(r.mes),
+          recibido: Number(r.recibido) || 0,
+          consumido: Number(r.consumido) || 0,
+        })),
+        alertasVencimiento: alertasData.map((r: any) => ({
+          lineaCod: r.lineaCod,
+          lineaDesc: r.lineaDesc || r.lineaCod,
+          bucket_0_30: Number(r.bucket_0_30) || 0,
+          bucket_31_60: Number(r.bucket_31_60) || 0,
+          bucket_61_90: Number(r.bucket_61_90) || 0,
+          bucket_91_120: Number(r.bucket_91_120) || 0,
+          bucket_121_150: Number(r.bucket_121_150) || 0,
+          bucket_151_180: Number(r.bucket_151_180) || 0,
+        })),
+        top10Rotacion: rotacionData.map((r: any) => ({
+          codigo: r.codigo,
+          descripcion: r.descripcion || r.codigo,
+          lineaDesc: r.lineaDesc || '',
+          qtyConsumida12M: Number(r.qtyConsumida12M) || 0,
+          ranking: Number(r.ranking) || 0,
+        })),
+        stockPorLinea: stockLineaData.map((r: any) => ({
+          lineaCod: r.lineaCod,
+          lineaDesc: r.lineaDesc || r.lineaCod,
+          stockFisico: Number(r.stockFisico) || 0,
+          stockDisponible: Number(r.stockDisponible) || 0,
+        })),
+        historialVencidos: histVencData.map((r: any) => ({
+          ...formatMes(r.mes),
+          vencidasFisica: Number(r.vencidasFisica) || 0,
+          vencidasDisponible: Number(r.vencidasDisponible) || 0,
+        })),
+      },
+    })
+  } catch (error: any) {
+    logger.error('Failed to get business KPIs:', error)
+    res.status(500).json({ error: 'Failed to get business KPIs', details: error.message })
+  }
+})
+
 export default router
