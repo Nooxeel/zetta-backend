@@ -24,6 +24,7 @@ import databasesRoutes from './routes/databases'
 import viewsRoutes from './routes/views'
 import etlRoutes from './routes/etl'
 import warehouseRoutes from './routes/warehouse'
+import adminRoutes from './routes/admin'
 
 // Import auth middleware
 import { authenticate, requireRole } from './middleware/auth'
@@ -96,6 +97,7 @@ app.use('/api/warehouse', authenticate, warehouseRoutes)
 
 // ─── Admin-Only Routes ──────────────────────────────
 app.use('/api/etl', authenticate, requireRole('ADMIN'), etlRoutes)
+app.use('/api/admin', authenticate, requireRole('ADMIN'), adminRoutes)
 
 // ─── Error handling ────────────────────────────────────
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
