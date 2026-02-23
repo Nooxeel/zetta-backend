@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import sql from 'mssql'
+import ExcelJS from 'exceljs'
 import dbManager from '../lib/db'
 import { createLogger } from '../lib/logger'
 
@@ -537,6 +538,150 @@ router.get('/entities', async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error('Failed to generate entities:', error)
     res.status(500).json({ error: 'Failed to generate entities', details: error.message })
+  }
+})
+
+/**
+ * GET /api/views/export
+ *
+ * Export all filtered data from a SQL Server view as CSV or XLSX.
+ * Same search/sort as /data but no pagination.
+ * Query params: db, view, schema, format=csv|xlsx, search, sortBy, sortOrder
+ */
+router.get('/export', async (req: Request, res: Response) => {
+  const {
+    db, view,
+    schema: schemaParam,
+    format: formatParam,
+    search,
+    sortBy,
+    sortOrder: sortOrderParam,
+  } = req.query
+
+  if (!db || !view || typeof db !== 'string' || typeof view !== 'string') {
+    res.status(400).json({ error: 'Missing required query params: db, view' })
+    return
+  }
+
+  const schema = (typeof schemaParam === 'string' && schemaParam) ? schemaParam : 'dbo'
+  const format = (typeof formatParam === 'string' && formatParam === 'xlsx') ? 'xlsx' : 'csv'
+  const sortOrder = (typeof sortOrderParam === 'string' && sortOrderParam.toLowerCase() === 'desc') ? 'DESC' : 'ASC'
+
+  try {
+    const pool = await dbManager.getPool(db)
+
+    if (!ALLOWED_VIEWS.includes(view)) {
+      res.status(404).json({ error: `View "${schema}.${view}" not found` })
+      return
+    }
+
+    const viewCheck = await pool.request()
+      .input('viewName', view)
+      .input('schemaName', schema)
+      .query(`
+        SELECT TABLE_SCHEMA, TABLE_NAME
+        FROM INFORMATION_SCHEMA.VIEWS
+        WHERE TABLE_NAME = @viewName AND TABLE_SCHEMA = @schemaName
+      `)
+
+    if (viewCheck.recordset.length === 0) {
+      res.status(404).json({ error: `View "${schema}.${view}" not found` })
+      return
+    }
+
+    const validatedSchema = viewCheck.recordset[0].TABLE_SCHEMA
+    const validatedView = viewCheck.recordset[0].TABLE_NAME
+
+    const colResult = await pool.request()
+      .input('viewName', validatedView)
+      .input('schemaName', validatedSchema)
+      .query(`
+        SELECT COLUMN_NAME, DATA_TYPE
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = @viewName AND TABLE_SCHEMA = @schemaName
+        ORDER BY ORDINAL_POSITION
+      `)
+
+    const columns = colResult.recordset
+    const columnNames = columns.map((c: any) => c.COLUMN_NAME as string)
+
+    // Validate sortBy
+    let validatedSortBy: string | null = null
+    if (sortBy && typeof sortBy === 'string') {
+      if (columnNames.includes(sortBy)) validatedSortBy = sortBy
+    }
+
+    // Search
+    const textTypes = ['varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext']
+    const textColumns = columns.filter((c: any) => textTypes.includes((c.DATA_TYPE as string).toLowerCase()))
+    let whereClause = ''
+    const searchTerm = (typeof search === 'string' && search.trim()) ? search.trim() : null
+
+    if (searchTerm && textColumns.length > 0) {
+      const conditions = textColumns.map((c: any) => `[${c.COLUMN_NAME}] LIKE @search`).join(' OR ')
+      whereClause = `WHERE (${conditions})`
+    }
+
+    const orderClause = validatedSortBy
+      ? `ORDER BY [${validatedSortBy}] ${sortOrder}`
+      : 'ORDER BY (SELECT NULL)'
+
+    const dataRequest = pool.request()
+    if (searchTerm && textColumns.length > 0) {
+      dataRequest.input('search', `%${searchTerm}%`)
+    }
+
+    // Fetch all data (max 50,000)
+    const dataResult = await dataRequest.query(`
+      SELECT TOP 50000 *
+      FROM [${validatedSchema}].[${validatedView}]
+      ${whereClause}
+      ${orderClause}
+    `)
+
+    const data = dataResult.recordset
+    const fileName = `${validatedView}_${new Date().toISOString().slice(0, 10)}`
+
+    if (format === 'xlsx') {
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet(validatedView.slice(0, 31))
+
+      sheet.columns = columnNames.map(col => ({ header: col, key: col, width: 20 }))
+      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } }
+
+      for (const row of data) {
+        sheet.addRow(row)
+      }
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.xlsx"`)
+      await workbook.xlsx.write(res)
+      res.end()
+    } else {
+      const csvHeader = columnNames.join(',')
+      const csvRows = data.map((row: any) =>
+        columnNames.map(col => {
+          const val = row[col]
+          if (val === null || val === undefined) return ''
+          const str = String(val)
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`
+          }
+          return str
+        }).join(',')
+      )
+
+      const csv = [csvHeader, ...csvRows].join('\n')
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.csv"`)
+      res.send('\uFEFF' + csv)
+    }
+
+    logger.info(`Exported ${data.length} rows from ${validatedView} as ${format}`)
+  } catch (error: any) {
+    logger.error('Failed to export view data:', error)
+    res.status(500).json({ error: 'Failed to export data', details: error.message })
   }
 })
 

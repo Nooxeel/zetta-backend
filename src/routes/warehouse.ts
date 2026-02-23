@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import ExcelJS from 'exceljs'
 import prisma from '../lib/prisma'
 import { sanitizeIdentifier } from '../services/dynamicTable.service'
 import { createLogger } from '../lib/logger'
@@ -374,6 +375,159 @@ router.get('/data', async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error('Failed to query warehouse data:', error)
     res.status(500).json({ error: 'Failed to query warehouse data', details: error.message })
+  }
+})
+
+/**
+ * GET /api/warehouse/export
+ *
+ * Export all filtered data as CSV or XLSX (no pagination limit).
+ * Same query params as /data except page/pageSize are ignored.
+ * Additional: format=csv|xlsx (default csv)
+ */
+router.get('/export', async (req: Request, res: Response) => {
+  const {
+    syncedViewId,
+    format: formatParam,
+    search,
+    sortBy,
+    sortOrder: sortOrderParam,
+    filters: filtersRaw,
+  } = req.query
+
+  if (!syncedViewId || typeof syncedViewId !== 'string') {
+    res.status(400).json({ error: 'Missing required query param: syncedViewId' })
+    return
+  }
+
+  const format = (typeof formatParam === 'string' && formatParam === 'xlsx') ? 'xlsx' : 'csv'
+  const sortOrder = (typeof sortOrderParam === 'string' && sortOrderParam.toLowerCase() === 'desc') ? 'DESC' : 'ASC'
+
+  let parsedFilters: ColumnFilter[] = []
+  if (filtersRaw && typeof filtersRaw === 'string') {
+    try {
+      const arr = JSON.parse(filtersRaw)
+      if (Array.isArray(arr)) parsedFilters = arr
+    } catch {
+      res.status(400).json({ error: 'Invalid filters JSON' })
+      return
+    }
+  }
+
+  try {
+    const syncedView = await prisma.syncedView.findUnique({
+      where: { id: syncedViewId },
+      include: {
+        source: true,
+        columns: { where: { removedInVersion: null }, orderBy: { ordinalPosition: 'asc' } },
+      },
+    })
+
+    if (!syncedView || syncedView.status !== 'SYNCED') {
+      res.status(404).json({ error: 'Synced view not found or not yet synced' })
+      return
+    }
+
+    const { pgTableName, columns } = syncedView
+    const columnNames = columns.map(c => sanitizeIdentifier(c.columnName))
+
+    // Validate sortBy
+    let validatedSortBy: string | null = null
+    if (sortBy && typeof sortBy === 'string') {
+      const sanitizedSort = sanitizeIdentifier(sortBy)
+      if (columnNames.includes(sanitizedSort)) validatedSortBy = sanitizedSort
+    }
+
+    // Build WHERE
+    const columnMeta = columns.map(c => ({ columnName: c.columnName, pgType: c.pgType }))
+    const allConditions: string[] = []
+    const queryParams: any[] = []
+    let paramIdx = 1
+
+    const textPgTypes = ['VARCHAR', 'TEXT', 'CHAR', 'XML', 'UUID']
+    const textColumns = columns.filter(c => textPgTypes.some(t => c.pgType.toUpperCase().startsWith(t)))
+    const searchTerm = (typeof search === 'string' && search.trim()) ? search.trim() : null
+
+    if (searchTerm && textColumns.length > 0) {
+      const searchConditions = textColumns.map(c => {
+        queryParams.push(`%${searchTerm}%`)
+        return `"${sanitizeIdentifier(c.columnName)}"::TEXT ILIKE $${paramIdx++}`
+      }).join(' OR ')
+      allConditions.push(`(${searchConditions})`)
+    }
+
+    if (parsedFilters.length > 0) {
+      const filterResult = buildFilterClauses(parsedFilters, columnMeta, paramIdx)
+      queryParams.push(...filterResult.params)
+      allConditions.push(...filterResult.clauses)
+      paramIdx = filterResult.nextIndex
+    }
+
+    const whereClause = allConditions.length > 0 ? `WHERE ${allConditions.join(' AND ')}` : ''
+    const orderClause = validatedSortBy ? `ORDER BY "${validatedSortBy}" ${sortOrder}` : 'ORDER BY _etl_id'
+
+    // Query ALL data (max 50,000 rows)
+    queryParams.push(50000)
+    const dataResult: any[] = await prisma.$queryRawUnsafe(
+      `SELECT * FROM etl."${pgTableName}" ${whereClause} ${orderClause} LIMIT $${paramIdx}`,
+      ...queryParams
+    )
+
+    // Strip internal columns
+    const cleanData = dataResult.map(row => {
+      const { _etl_id, _etl_synced_at, ...rest } = row
+      return rest
+    })
+
+    const exportColumns = columns.map(c => sanitizeIdentifier(c.columnName))
+    const fileName = `${syncedView.sourceView}_${new Date().toISOString().slice(0, 10)}`
+
+    if (format === 'xlsx') {
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet(syncedView.sourceView.slice(0, 31))
+
+      // Header row
+      sheet.columns = exportColumns.map(col => ({ header: col, key: col, width: 20 }))
+
+      // Style header
+      sheet.getRow(1).font = { bold: true }
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } }
+      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+
+      // Data rows
+      for (const row of cleanData) {
+        sheet.addRow(row)
+      }
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.xlsx"`)
+      await workbook.xlsx.write(res)
+      res.end()
+    } else {
+      // CSV
+      const csvHeader = exportColumns.join(',')
+      const csvRows = cleanData.map(row =>
+        exportColumns.map(col => {
+          const val = (row as any)[col]
+          if (val === null || val === undefined) return ''
+          const str = String(val)
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`
+          }
+          return str
+        }).join(',')
+      )
+
+      const csv = [csvHeader, ...csvRows].join('\n')
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.csv"`)
+      res.send('\uFEFF' + csv) // BOM for Excel UTF-8
+    }
+
+    logger.info(`Exported ${cleanData.length} rows from ${syncedView.sourceView} as ${format}`)
+  } catch (error: any) {
+    logger.error('Failed to export warehouse data:', error)
+    res.status(500).json({ error: 'Failed to export data', details: error.message })
   }
 })
 
