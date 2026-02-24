@@ -24,6 +24,141 @@ export const ALLOWED_VIEWS: string[] = [
   'VW_SHS_STOCK_POR_LOTE_DESDE_KARDEX',
 ]
 
+// ─── Filter Engine (SQL Server) ─────────────────────────
+
+type FilterCategory = 'text' | 'number' | 'date' | 'boolean' | 'unsupported'
+
+interface ColumnFilter {
+  column: string
+  operator: string
+  value: string
+  value2?: string
+}
+
+function getSqlServerFilterCategory(sqlType: string): FilterCategory {
+  switch (sqlType.toLowerCase()) {
+    case 'varchar': case 'nvarchar': case 'char': case 'nchar':
+    case 'text': case 'ntext': case 'uniqueidentifier': case 'xml':
+      return 'text'
+    case 'int': case 'bigint': case 'smallint': case 'tinyint':
+    case 'decimal': case 'numeric': case 'float': case 'real':
+    case 'money': case 'smallmoney':
+      return 'number'
+    case 'date': case 'datetime': case 'datetime2':
+    case 'smalldatetime': case 'datetimeoffset': case 'time':
+      return 'date'
+    case 'bit':
+      return 'boolean'
+    default:
+      return 'unsupported'
+  }
+}
+
+const ALLOWED_OPERATORS: Record<FilterCategory, string[]> = {
+  text: ['contains', 'equals', 'starts_with', 'ends_with', 'not_equals'],
+  number: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
+  date: ['eq', 'before', 'after', 'between'],
+  boolean: ['eq'],
+  unsupported: [],
+}
+
+function buildSqlServerFilterClauses(
+  filters: ColumnFilter[],
+  columnMeta: Array<{ COLUMN_NAME: string; DATA_TYPE: string }>,
+): { clauses: string[]; applyParams: (request: sql.Request) => void } {
+  const clauses: string[] = []
+  const paramSetters: Array<(request: sql.Request) => void> = []
+  let idx = 0
+
+  for (const filter of filters) {
+    const col = columnMeta.find(c => c.COLUMN_NAME === filter.column)
+    if (!col) continue
+
+    const category = getSqlServerFilterCategory(col.DATA_TYPE)
+    const allowed = ALLOWED_OPERATORS[category]
+    if (!allowed.includes(filter.operator)) continue
+
+    const colRef = `[${col.COLUMN_NAME}]`
+    const paramName = `f${idx++}`
+
+    switch (category) {
+      case 'text':
+        switch (filter.operator) {
+          case 'contains':
+            clauses.push(`${colRef} LIKE @${paramName}`)
+            paramSetters.push(r => r.input(paramName, `%${filter.value}%`))
+            break
+          case 'equals':
+            clauses.push(`${colRef} = @${paramName}`)
+            paramSetters.push(r => r.input(paramName, filter.value))
+            break
+          case 'starts_with':
+            clauses.push(`${colRef} LIKE @${paramName}`)
+            paramSetters.push(r => r.input(paramName, `${filter.value}%`))
+            break
+          case 'ends_with':
+            clauses.push(`${colRef} LIKE @${paramName}`)
+            paramSetters.push(r => r.input(paramName, `%${filter.value}`))
+            break
+          case 'not_equals':
+            clauses.push(`${colRef} != @${paramName}`)
+            paramSetters.push(r => r.input(paramName, filter.value))
+            break
+        }
+        break
+
+      case 'number': {
+        const numType = ['int', 'bigint', 'smallint', 'tinyint'].includes(col.DATA_TYPE.toLowerCase())
+          ? sql.Float : sql.Decimal(18, 4)
+        const ops: Record<string, string> = { eq: '=', neq: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=' }
+        if (filter.operator === 'between') {
+          const p2 = `f${idx++}`
+          clauses.push(`${colRef} BETWEEN @${paramName} AND @${p2}`)
+          paramSetters.push(r => {
+            r.input(paramName, numType, parseFloat(filter.value))
+            r.input(p2, numType, parseFloat(filter.value2 || '0'))
+          })
+        } else if (ops[filter.operator]) {
+          clauses.push(`${colRef} ${ops[filter.operator]} @${paramName}`)
+          paramSetters.push(r => r.input(paramName, numType, parseFloat(filter.value)))
+        }
+        break
+      }
+
+      case 'date': {
+        const dateOps: Record<string, string> = { eq: '=', before: '<', after: '>' }
+        if (filter.operator === 'between') {
+          const p2 = `f${idx++}`
+          clauses.push(`CAST(${colRef} AS DATE) BETWEEN @${paramName} AND @${p2}`)
+          paramSetters.push(r => {
+            r.input(paramName, sql.Date, new Date(filter.value))
+            r.input(p2, sql.Date, new Date(filter.value2 || filter.value))
+          })
+        } else if (filter.operator === 'eq') {
+          clauses.push(`CAST(${colRef} AS DATE) = @${paramName}`)
+          paramSetters.push(r => r.input(paramName, sql.Date, new Date(filter.value)))
+        } else if (dateOps[filter.operator]) {
+          clauses.push(`${colRef} ${dateOps[filter.operator]} @${paramName}`)
+          paramSetters.push(r => r.input(paramName, sql.Date, new Date(filter.value)))
+        }
+        break
+      }
+
+      case 'boolean':
+        clauses.push(`${colRef} = @${paramName}`)
+        paramSetters.push(r => r.input(paramName, sql.Bit, filter.value === 'true' ? 1 : 0))
+        break
+    }
+  }
+
+  return {
+    clauses,
+    applyParams: (request: sql.Request) => {
+      for (const setter of paramSetters) setter(request)
+    },
+  }
+}
+
 // --- Helper types & functions for TypeScript interface generation ---
 
 interface ColumnMeta {
@@ -190,7 +325,10 @@ router.get('/columns', async (req: Request, res: Response) => {
     res.json({
       database: db,
       view,
-      columns: result.recordset,
+      columns: result.recordset.map((c: any) => ({
+        ...c,
+        filterCategory: getSqlServerFilterCategory(c.type || c.DATA_TYPE || ''),
+      })),
       count: result.recordset.length,
     })
   } catch (error: any) {
@@ -268,6 +406,7 @@ router.get('/data', async (req: Request, res: Response) => {
     search,
     sortBy,
     sortOrder: sortOrderParam,
+    filters: filtersParam,
   } = req.query
 
   if (!db || !view || typeof db !== 'string' || typeof view !== 'string') {
@@ -333,16 +472,31 @@ router.get('/data', async (req: Request, res: Response) => {
       validatedSortBy = sortBy
     }
 
-    // 4. Build search WHERE clause (LIKE across text columns)
+    // 4. Build WHERE conditions
+    const allConditions: string[] = []
+
+    // 4a. Global search (LIKE across text columns)
     const textTypes = ['varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext']
     const textColumns = columns.filter((c: any) => textTypes.includes((c.DATA_TYPE as string).toLowerCase()))
-    let whereClause = ''
     const searchTerm = (typeof search === 'string' && search.trim()) ? search.trim() : null
 
     if (searchTerm && textColumns.length > 0) {
       const conditions = textColumns.map((c: any) => `[${c.COLUMN_NAME}] LIKE @search`).join(' OR ')
-      whereClause = `WHERE (${conditions})`
+      allConditions.push(`(${conditions})`)
     }
+
+    // 4b. Column-specific filters
+    let parsedFilters: ColumnFilter[] = []
+    if (filtersParam && typeof filtersParam === 'string') {
+      try { parsedFilters = JSON.parse(filtersParam) } catch { /* ignore */ }
+    }
+
+    const filterResult = buildSqlServerFilterClauses(parsedFilters, columns)
+    allConditions.push(...filterResult.clauses)
+
+    const whereClause = allConditions.length > 0
+      ? `WHERE ${allConditions.join(' AND ')}`
+      : ''
 
     // 5. Build ORDER BY clause
     const orderClause = validatedSortBy
@@ -357,6 +511,7 @@ router.get('/data', async (req: Request, res: Response) => {
     if (searchTerm && textColumns.length > 0) {
       dataRequest.input('search', `%${searchTerm}%`)
     }
+    filterResult.applyParams(dataRequest)
 
     const dataResult = await dataRequest.query(`
       SELECT *
@@ -372,6 +527,7 @@ router.get('/data', async (req: Request, res: Response) => {
     if (searchTerm && textColumns.length > 0) {
       countRequest.input('search', `%${searchTerm}%`)
     }
+    filterResult.applyParams(countRequest)
 
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
@@ -385,7 +541,11 @@ router.get('/data', async (req: Request, res: Response) => {
       database: db,
       view: validatedView,
       schema: validatedSchema,
-      columns: columns.map((c: any) => ({ column: c.COLUMN_NAME, type: c.DATA_TYPE })),
+      columns: columns.map((c: any) => ({
+        column: c.COLUMN_NAME,
+        type: c.DATA_TYPE,
+        filterCategory: getSqlServerFilterCategory(c.DATA_TYPE),
+      })),
       data: dataResult.recordset,
       pagination: {
         page,
@@ -556,6 +716,7 @@ router.get('/export', async (req: Request, res: Response) => {
     search,
     sortBy,
     sortOrder: sortOrderParam,
+    filters: filtersParam,
   } = req.query
 
   if (!db || !view || typeof db !== 'string' || typeof view !== 'string') {
@@ -611,16 +772,28 @@ router.get('/export', async (req: Request, res: Response) => {
       if (columnNames.includes(sortBy)) validatedSortBy = sortBy
     }
 
-    // Search
+    // Build WHERE conditions
+    const exportConditions: string[] = []
     const textTypes = ['varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext']
     const textColumns = columns.filter((c: any) => textTypes.includes((c.DATA_TYPE as string).toLowerCase()))
-    let whereClause = ''
     const searchTerm = (typeof search === 'string' && search.trim()) ? search.trim() : null
 
     if (searchTerm && textColumns.length > 0) {
       const conditions = textColumns.map((c: any) => `[${c.COLUMN_NAME}] LIKE @search`).join(' OR ')
-      whereClause = `WHERE (${conditions})`
+      exportConditions.push(`(${conditions})`)
     }
+
+    // Column-specific filters
+    let exportFilters: ColumnFilter[] = []
+    if (filtersParam && typeof filtersParam === 'string') {
+      try { exportFilters = JSON.parse(filtersParam) } catch { /* ignore */ }
+    }
+    const exportFilterResult = buildSqlServerFilterClauses(exportFilters, columns)
+    exportConditions.push(...exportFilterResult.clauses)
+
+    const whereClause = exportConditions.length > 0
+      ? `WHERE ${exportConditions.join(' AND ')}`
+      : ''
 
     const orderClause = validatedSortBy
       ? `ORDER BY [${validatedSortBy}] ${sortOrder}`
@@ -630,6 +803,7 @@ router.get('/export', async (req: Request, res: Response) => {
     if (searchTerm && textColumns.length > 0) {
       dataRequest.input('search', `%${searchTerm}%`)
     }
+    exportFilterResult.applyParams(dataRequest)
 
     // Fetch all data (max 50,000)
     const dataResult = await dataRequest.query(`
