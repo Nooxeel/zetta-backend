@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { verifyJwt, JwtPayload } from '../lib/auth'
+import prisma from '../lib/prisma'
 import { createLogger } from '../lib/logger'
 
 const logger = createLogger('AuthMiddleware')
@@ -40,21 +41,34 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
 /**
  * Checks that the authenticated user has one of the specified roles.
+ * Fetches the CURRENT role from the database (not the JWT claim)
+ * so role changes take effect immediately without re-login.
  * Must be used AFTER authenticate middleware.
- * Returns 403 if the user lacks the required role.
  */
 export function requireRole(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' })
       return
     }
 
-    if (!roles.includes(req.user.role)) {
-      res.status(403).json({ error: 'Insufficient permissions' })
-      return
-    }
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: { role: true },
+      })
 
-    next()
+      if (!user || !roles.includes(user.role)) {
+        res.status(403).json({ error: 'Insufficient permissions' })
+        return
+      }
+
+      // Update the JWT payload with the fresh role
+      req.user.role = user.role
+      next()
+    } catch (error) {
+      logger.error('Role check failed:', error)
+      res.status(500).json({ error: 'Failed to verify permissions' })
+    }
   }
 }
