@@ -15,7 +15,7 @@ import {
   generatePgTableName,
   createEtlTable,
   truncateEtlTable,
-  evolveTableSchema,
+  dropEtlTable,
   sanitizeIdentifier,
   type ColumnDefinition,
 } from './dynamicTable.service'
@@ -121,10 +121,12 @@ export async function syncView(
 
     // 5. Handle schema: create or evolve table
     const existingColumns = syncedView.columns
+    let tableJustCreated = false
 
     if (existingColumns.length === 0) {
       // First sync — create the table
       await createEtlTable(pgTableName, columns)
+      tableJustCreated = true
 
       // Persist column metadata
       for (const col of columns) {
@@ -140,63 +142,81 @@ export async function syncView(
         })
       }
     } else {
-      // Detect schema changes
+      // Detect schema changes: added columns, removed columns, or type changes
       const existingNames = new Set(existingColumns.map(c => c.columnName.toLowerCase()))
       const newNames = new Set(columns.map(c => c.columnName.toLowerCase()))
 
       const added = columns.filter(c => !existingNames.has(c.columnName.toLowerCase()))
       const removed = existingColumns.filter(c => !newNames.has(c.columnName.toLowerCase()))
 
-      if (added.length > 0 || removed.length > 0) {
-        logger.info(`Schema change detected for ${pgTableName}: +${added.length} cols, -${removed.length} cols`)
+      const typeChanged = columns.some(c => {
+        const existing = existingColumns.find(
+          e => e.columnName.toLowerCase() === c.columnName.toLowerCase()
+        )
+        if (!existing) return false
+        return existing.pgType !== buildPgColumnType(c.sqlServerType, c.maxLength)
+      })
 
+      const schemaChanged = added.length > 0 || removed.length > 0 || typeChanged
+
+      if (schemaChanged) {
         const newVersion = syncedView.schemaVersion + 1
 
-        if (added.length > 0) {
-          await evolveTableSchema(pgTableName, added)
-          for (const col of added) {
-            await prisma.syncedColumn.create({
-              data: {
-                syncedViewId: syncedView.id,
-                columnName: col.columnName,
-                sqlServerType: col.sqlServerType,
-                isNullable: col.isNullable,
-                ordinalPosition: col.ordinalPosition,
-                pgType: buildPgColumnType(col.sqlServerType, col.maxLength),
-                addedInVersion: newVersion,
-              },
-            })
-          }
+        logger.info(
+          `Schema change detected for ${pgTableName}: ` +
+          `+${added.length} cols, -${removed.length} cols, ` +
+          `type changes: ${typeChanged}. Dropping and recreating table.`
+        )
+
+        // Drop and recreate the PG table with the new schema
+        await dropEtlTable(pgTableName)
+        await createEtlTable(pgTableName, columns)
+        tableJustCreated = true
+
+        // Delete all old SyncedColumn records and create fresh ones
+        await prisma.syncedColumn.deleteMany({
+          where: { syncedViewId: syncedView.id },
+        })
+
+        for (const col of columns) {
+          await prisma.syncedColumn.create({
+            data: {
+              syncedViewId: syncedView.id,
+              columnName: col.columnName,
+              sqlServerType: col.sqlServerType,
+              isNullable: col.isNullable,
+              ordinalPosition: col.ordinalPosition,
+              pgType: buildPgColumnType(col.sqlServerType, col.maxLength),
+              addedInVersion: newVersion,
+            },
+          })
         }
 
-        if (removed.length > 0) {
-          for (const col of removed) {
-            await prisma.syncedColumn.update({
-              where: { id: col.id },
-              data: { removedInVersion: newVersion },
-            })
-          }
-        }
-
+        // Update schema version
         await prisma.syncedView.update({
           where: { id: syncedView.id },
           data: { schemaVersion: newVersion },
         })
 
+        // Log the schema change
         await prisma.syncLog.update({
           where: { id: syncLog.id },
           data: {
             schemaChanges: JSON.stringify({
+              action: 'drop_and_recreate',
               added: added.map(c => c.columnName),
               removed: removed.map(c => c.columnName),
+              typeChanged,
             }),
           },
         })
       }
     }
 
-    // 6. Full sync: truncate and re-insert
-    await truncateEtlTable(pgTableName)
+    // 6. Full sync: truncate existing data (skip if table was just created/recreated)
+    if (!tableJustCreated) {
+      await truncateEtlTable(pgTableName)
+    }
 
     // 7. Read from SQL Server and write to PostgreSQL in batches
     const countResult = await pool.request()

@@ -100,13 +100,14 @@ enum Role {
   BASIC
 }
 
-/// Google OAuth users with role-based access
+/// Users with Google OAuth and/or email/password authentication
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
   image     String?
-  googleId  String   @unique @map("google_id")
+  googleId  String?  @unique @map("google_id")
+  password  String?
   role      Role     @default(BASIC)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

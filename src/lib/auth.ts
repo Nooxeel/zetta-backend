@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import { createLogger } from './logger'
 
@@ -33,6 +34,17 @@ export interface GoogleUserInfo {
   email: string
   name: string | undefined
   image: string | undefined
+}
+
+// ─── Password Functions ─────────────────────────────
+const SALT_ROUNDS = 10
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, SALT_ROUNDS)
+}
+
+export async function comparePassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash)
 }
 
 // ─── JWT Functions ───────────────────────────────────
